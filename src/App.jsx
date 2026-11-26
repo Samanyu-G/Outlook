@@ -6,6 +6,12 @@ import CommentsSheet from './components/CommentsSheet.jsx'
 import AuthSheet from './components/AuthSheet.jsx'
 import ProfileSheet from './components/ProfileSheet.jsx'
 import UploadSheet from './components/UploadSheet.jsx'
+import MoreSheet from './components/MoreSheet.jsx'
+import ReportSheet from './components/ReportSheet.jsx'
+import ModerationSheet from './components/ModerationSheet.jsx'
+import LegalSheet from './components/LegalSheet.jsx'
+import TermsGate from './components/TermsGate.jsx'
+import { TERMS_PENDING_KEY } from './content/legal.js'
 import { HomeIcon, PlusIcon, UserIcon } from './components/Icons.jsx'
 
 const TABS = [['following', 'Following'], ['foryou', 'For You'], ['fresh', 'Fresh']]
@@ -17,7 +23,9 @@ export default function App() {
   const [games, setGames] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [sheet, setSheet] = useState(null) // { type: 'auth'|'comments'|'profile'|'upload', game?, reason? }
+  const [sheet, setSheet] = useState(null) // { type: 'auth'|'comments'|'profile'|'upload'|'more'|'report'|'moderation', ... }
+  const [doc, setDoc] = useState(null)       // 'terms' | 'privacy' (shown on top of any sheet)
+  const [needTerms, setNeedTerms] = useState(false)
   const [playingId, setPlayingId] = useState(null)
   const [toastMsg, setToastMsg] = useState('')
   const toastTimer = useRef(null)
@@ -39,6 +47,23 @@ export default function App() {
       if (isMember(u)) setSheet((s) => (s?.type === 'auth' ? null : s))
     })
   }, [])
+
+  // After a real sign-in: record the terms agreement ticked before the email link,
+  // or ask once if this account never agreed (e.g. signed up before Phase 4).
+  useEffect(() => {
+    if (!member) { setNeedTerms(false); return }
+    let alive = true
+    api.getMyProfile().then(async (p) => {
+      if (!alive || !p || !('terms_accepted_at' in p) || p.terms_accepted_at) return
+      let pending = null
+      try { pending = localStorage.getItem(TERMS_PENDING_KEY) } catch { /* ignore */ }
+      if (pending) {
+        try { await api.acceptTerms(); localStorage.removeItem(TERMS_PENDING_KEY); return } catch { /* fall back to asking */ }
+      }
+      if (alive) setNeedTerms(true)
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [member?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Returns true if signed in; otherwise opens the sign-in sheet.
   const requireUser = useCallback((reason) => {
@@ -92,6 +117,22 @@ export default function App() {
     navigator.clipboard?.writeText(text).then(() => toast('Share message copied'), () => toast('Couldn’t copy. Try again.'))
   }
 
+  function onReport(target) {
+    if (!requireUser('Sign in to report something.')) return
+    setSheet({ type: 'report', target })
+  }
+
+  async function onBlock(person) {
+    if (!requireUser('Sign in to block someone.')) return
+    if (person.id === member.id) { toast('You can’t block yourself.'); return }
+    try {
+      await api.block(person.id)
+      setSheet(null); setPlayingId(null)
+      toast(`Blocked @${person.handle}. You can unblock them in Profile.`)
+      loadFeed()
+    } catch (e) { toast(e.message) }
+  }
+
   async function onFeedback(game, tags) {
     try { await api.sendFeedback(game.id, tags); toast(`Feedback sent to @${game.creator.handle}`); return true } catch (e) { toast(e.message); return false }
   }
@@ -120,7 +161,8 @@ export default function App() {
             games={games} loading={loading} error={error} tab={tab}
             paused={!!playing}
             onPlay={(g) => setPlayingId(g.id)}
-            onLike={onLike} onFollow={onFollow} onShare={onShare}
+            onLike={onLike} onFollow={onFollow}
+            onMore={(g) => setSheet({ type: 'more', game: g })}
             onComments={(g) => setSheet({ type: 'comments', game: g })}
             onView={(id) => api.recordView(id).catch(() => {})}
             onRetry={loadFeed}
@@ -157,15 +199,32 @@ export default function App() {
           <CommentsSheet
             game={games.find((g) => g.id === sheet.game.id) || sheet.game} user={member} onClose={closeSheet}
             onAdded={(g) => patchGame(g.id, (x) => ({ ...x, comments: x.comments + 1 }))}
+            onRemoved={(g) => patchGame(g.id, (x) => ({ ...x, comments: Math.max(0, x.comments - 1) }))}
             onNeedSignIn={(reason) => setSheet({ type: 'auth', reason })}
+            onReport={onReport} onBlock={onBlock} toast={toast}
           />
         )}
-        {sheet?.type === 'auth' && <AuthSheet reason={sheet.reason} onClose={closeSheet} />}
+        {sheet?.type === 'auth' && <AuthSheet reason={sheet.reason} onClose={closeSheet} onOpenDoc={setDoc} />}
+        {sheet?.type === 'more' && (
+          <MoreSheet
+            game={sheet.game} isOwn={member?.id === sheet.game.creator.id} onClose={closeSheet}
+            onShare={(g) => { setSheet(null); onShare(g) }} onReport={onReport} onBlock={onBlock}
+          />
+        )}
+        {sheet?.type === 'report' && (
+          <ReportSheet target={sheet.target} onClose={closeSheet}
+            onDone={() => { setSheet(null); toast('Thanks for reporting. A moderator will review it.') }} />
+        )}
+        {sheet?.type === 'moderation' && member && (
+          <ModerationSheet onClose={closeSheet} onChanged={loadFeed} toast={toast} />
+        )}
         {sheet?.type === 'profile' && member && (
           <ProfileSheet
             onClose={closeSheet} toast={toast}
             onProfileChanged={loadFeed}
             onGamesChanged={loadFeed}
+            onOpenModeration={() => setSheet({ type: 'moderation' })}
+            onOpenDoc={setDoc}
             onUnfollow={(creatorId) => {
               const g = games.find((x) => x.creator.id === creatorId)
               return setFollow(creatorId, g?.creator.handle ?? 'creator', false)
@@ -178,6 +237,15 @@ export default function App() {
             onPublished={() => { setSheet(null); if (tab === 'fresh') loadFeed(); else setTab('fresh') }}
           />
         )}
+
+        {member && needTerms && (
+          <TermsGate
+            onOpenDoc={setDoc}
+            onAccept={async () => { await api.acceptTerms(); setNeedTerms(false); toast('Welcome to Nativity!') }}
+            onSignOut={async () => { await api.signOut(); setNeedTerms(false) }}
+          />
+        )}
+        {doc && <LegalSheet doc={doc} onClose={() => setDoc(null)} />}
 
         {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
       </div>

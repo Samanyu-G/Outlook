@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createRunner } from '../games/engine.js'
 import { BUILTIN_GAMES } from '../games/builtin.js'
 import { BOOST_VIEWS, fmt, initials } from '../lib/api.js'
-import { CommentIcon, HeartBurst, HeartIcon, PlayIcon, ShareIcon } from './Icons.jsx'
+import { CommentIcon, HeartBurst, HeartIcon, MoreIcon, PlayIcon } from './Icons.jsx'
 
 /* The trailer: the game playing itself, only while its card is on screen. */
 function TrailerCanvas({ gameKey, active }) {
@@ -39,7 +39,7 @@ function VideoTrailer({ src, active }) {
   return <video ref={ref} className="trailer" src={src} muted loop playsInline preload={active ? 'auto' : 'metadata'} aria-hidden="true" />
 }
 
-function GameCard({ game, active, showCoach, onPlay, onLike, onFollow, onComments, onShare, bursts }) {
+function GameCard({ game, active, showCoach, onPlay, onLike, onFollow, onComments, onMore, bursts }) {
   const c = game.creator
   const [captionOpen, setCaptionOpen] = useState(false)
   return (
@@ -69,8 +69,8 @@ function GameCard({ game, active, showCoach, onPlay, onLike, onFollow, onComment
         <button type="button" aria-label="Comments" onClick={() => onComments(game)}>
           <CommentIcon /><span>{fmt(game.comments)}</span>
         </button>
-        <button type="button" aria-label="Share" onClick={() => onShare(game)}>
-          <ShareIcon /><span>Share</span>
+        <button type="button" aria-label="More options" onClick={() => onMore(game)}>
+          <MoreIcon /><span>More</span>
         </button>
       </aside>
 
@@ -104,7 +104,7 @@ function GameCard({ game, active, showCoach, onPlay, onLike, onFollow, onComment
 const COACH_KEY = 'nativity:coach-seen'
 const readCoach = () => { try { return localStorage.getItem(COACH_KEY) === '1' } catch { return true } }
 
-export default function Feed({ games, loading, error, tab, paused, onPlay, onLike, onFollow, onComments, onShare, onView, onRetry, onFindFresh }) {
+export default function Feed({ games, loading, error, tab, paused, onPlay, onLike, onFollow, onComments, onMore, onView, onRetry, onFindFresh }) {
   const feedRef = useRef(null)
   const [activeId, setActiveId] = useState(null)
   const [coachSeen, setCoachSeen] = useState(readCoach)
@@ -183,7 +183,7 @@ export default function Feed({ games, loading, error, tab, paused, onPlay, onLik
         active={!paused && activeId === g.id}
         showCoach={i === 0 && !coachSeen}
         bursts={bursts.filter((b) => b.gameId === g.id)}
-        onPlay={onPlay} onLike={onLike} onFollow={onFollow} onComments={onComments} onShare={onShare}
+        onPlay={onPlay} onLike={onLike} onFollow={onFollow} onComments={onComments} onMore={onMore}
       />
     </section>
   ))

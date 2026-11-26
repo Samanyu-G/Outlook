@@ -244,3 +244,36 @@ video.trailer { object-fit: cover; background: #000; }
 .mygame button { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); font-size: 12px; font-weight: 700; background: var(--panel); }
 .mygame button.danger { border-color: var(--danger); color: var(--danger); }
 .pill { font: 700 10px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 6px; border-radius: 6px; background: rgba(242, 217, 141, .5); color: #6b4e14; margin-left: 6px; vertical-align: 1px; }
+
+/* ---------- Phase 4: safety ---------- */
+.menu { display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; background: var(--panel-2); }
+.menu button { text-align: left; padding: 14px 16px; font-weight: 700; border-bottom: 1px solid var(--line); }
+.menu button:last-child { border-bottom: 0; }
+.menu .danger, .cm-menu .danger, .mod-actions .danger { color: var(--danger); }
+.reasons { display: flex; flex-direction: column; gap: 6px; }
+.reason { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid transparent; cursor: pointer; }
+.reason.on { border-color: var(--accent); background: rgba(231, 165, 140, .14); }
+.reason input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; }
+.cm { position: relative; }
+.cm > div { flex: 1; }
+.cm-more { flex: none; align-self: flex-start; width: 28px; height: 28px; border-radius: 50%; color: var(--muted); font-weight: 700; line-height: 1; }
+.cm-more:hover, .cm-more[aria-expanded="true"] { background: var(--panel-2); color: var(--text); }
+.cm-menu { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.cm-menu button { padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); font-size: 12px; font-weight: 700; background: var(--panel); }
+.pill.soft { background: var(--panel-2); color: var(--muted); }
+.agree { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.45; }
+.agree input { width: 20px; height: 20px; margin: 0; flex: none; accent-color: var(--sage); }
+.link { color: #9a5b42; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; padding: 0; }
+.legal-links { display: flex; justify-content: center; gap: 8px; margin: 0; font-size: 12px; color: var(--muted); }
+.legal h4 { margin: 0 0 4px; font-size: 14px; }
+.legal p { margin: 0; line-height: 1.55; font-size: 14px; }
+.rules { margin: 0; padding-left: 18px; line-height: 1.6; }
+.warn-note { background: rgba(194, 86, 106, .1); border-color: rgba(194, 86, 106, .35); }
+.warn-note b { color: var(--danger); }
+.mod { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: var(--panel-2); }
+.mod p { margin: 0; line-height: 1.45; overflow-wrap: anywhere; }
+.mod-h { display: flex; flex-wrap: wrap; gap: 6px; }
+.mod-h .pill { margin-left: 0; }
+.mod-reasons { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+.mod-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.mod-actions button { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); font-size: 12px; font-weight: 700; background: var(--panel); }

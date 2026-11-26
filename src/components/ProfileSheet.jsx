@@ -51,7 +51,30 @@ function MyGames({ onChanged, toast }) {
   )
 }
 
-export default function ProfileSheet({ onClose, onUnfollow, onProfileChanged, onGamesChanged, toast }) {
+function Blocked({ onChanged, toast }) {
+  const [people, setPeople] = useState(null)
+  useEffect(() => { api.listBlocked().then(setPeople).catch(() => setPeople([])) }, [])
+  async function unblock(p) {
+    try { await api.unblock(p.id); setPeople((list) => list.filter((x) => x.id !== p.id)); toast(`Unblocked @${p.handle}`); onChanged() } catch (e) { toast(e.message) }
+  }
+  if (!people?.length) return null
+  return (
+    <>
+      <h4 className="sub-h">Blocked</h4>
+      <div className="flist">
+        {people.map((p) => (
+          <div className="fitem" key={p.id}>
+            <span className="av" style={{ background: p.avatar_color }}>{initials(p.display_name || p.handle)}</span>
+            <div><b>@{p.handle}</b></div>
+            <button type="button" onClick={() => unblock(p)}>Unblock</button>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+export default function ProfileSheet({ onClose, onUnfollow, onProfileChanged, onGamesChanged, onOpenModeration, onOpenDoc, toast }) {
   const [profile, setProfile] = useState(null)
   const [stats, setStats] = useState(null)
   const [form, setForm] = useState(null)
@@ -97,6 +120,8 @@ export default function ProfileSheet({ onClose, onUnfollow, onProfileChanged, on
             <span className="av big" style={{ background: profile.avatar_color }}>{initials(profile.display_name || profile.handle)}</span>
             <div><b>@{profile.handle}</b><small>{profile.display_name}</small></div>
           </div>
+          {profile.banned && <div className="note warn-note"><b>Your account is suspended.</b> You can still play games, but you can’t post, comment, like, follow or upload. If you think this is a mistake, contact the Nativity team.</div>}
+          {profile.role === 'admin' && <button type="button" className="btn primary" onClick={onOpenModeration}>Open moderation</button>}
           {stats && (
             <div className="stats">
               <div><b>{stats.plays}</b><span>Rounds played</span></div>
@@ -135,7 +160,13 @@ export default function ProfileSheet({ onClose, onUnfollow, onProfileChanged, on
           ) : (
             <p className="muted">You aren’t following anyone yet. Tap the + on a creator’s picture to follow them.</p>
           )}
+          <Blocked onChanged={onGamesChanged} toast={toast} />
           <button type="button" className="btn" onClick={signOut}>Sign out</button>
+          <p className="legal-links">
+            <button type="button" className="link" onClick={() => onOpenDoc('terms')}>Terms of Service</button>
+            <span aria-hidden="true">·</span>
+            <button type="button" className="link" onClick={() => onOpenDoc('privacy')}>Privacy Policy</button>
+          </p>
         </>
       )}
       {error && <p className="err">{error}</p>}

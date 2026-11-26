@@ -10,8 +10,11 @@ export const rand = (a, b) => a + Math.random() * (b - a)
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
 
 export function rr(ctx, x, y, w, h, r) {
-  r = Math.min(r, w / 2, h / 2)
+  // Shapes can end up with zero or negative size on very small screens; the
+  // canvas throws on a negative corner radius, so draw nothing instead.
   ctx.beginPath()
+  if (!(w > 0 && h > 0)) return
+  r = Math.max(0, Math.min(r, w / 2, h / 2))
   ctx.moveTo(x + r, y)
   ctx.arcTo(x + w, y, x + w, y + h, r)
   ctx.arcTo(x + w, y + h, x, y + h, r)
@@ -89,7 +92,8 @@ export function createRunner(canvas, factory, mode, hooks = {}) {
     fit()
     const dt = Math.min(0.033, (t - last) / 1000 || 0)
     last = t
-    tick(dt); draw()
+    // A bug inside one game must never crash the whole app: stop that game instead.
+    try { tick(dt); draw() } catch (err) { running = false; console.error('Game stopped after an error:', err); return }
     raf = requestAnimationFrame(frame)
   }
 
@@ -117,7 +121,9 @@ export function createRunner(canvas, factory, mode, hooks = {}) {
   return {
     start() { if (running) return; running = true; last = performance.now(); raf = requestAnimationFrame(frame) },
     stop() { running = false; cancelAnimationFrame(raf) },
-    warm(sec) { fit(); for (let i = 0; i < sec * 60; i++) tick(1 / 60); draw() },
+    warm(sec) {
+      try { fit(); for (let i = 0; i < sec * 60; i++) tick(1 / 60); draw() } catch (err) { console.error('Game trailer failed to draw:', err) }
+    },
     restart() { reset(); state = mode === 'demo' ? 'run' : 'ready' },
     destroy() {
       running = false; cancelAnimationFrame(raf)

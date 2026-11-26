@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { api, timeAgo } from '../lib/api.js'
 import Sheet from './Sheet.jsx'
 
-export default function CommentsSheet({ game, user, onClose, onAdded, onNeedSignIn }) {
+export default function CommentsSheet({ game, user, onClose, onAdded, onRemoved, onNeedSignIn, onReport, onBlock, toast }) {
+  const [menuFor, setMenuFor] = useState(null)
   const [comments, setComments] = useState(null)
   const [error, setError] = useState('')
   const [text, setText] = useState('')
@@ -32,6 +33,14 @@ export default function CommentsSheet({ game, user, onClose, onAdded, onNeedSign
     }
   }
 
+  async function remove(c) {
+    try {
+      await api.deleteComment(c.id)
+      setComments((list) => list.filter((x) => x.id !== c.id))
+      setMenuFor(null); onRemoved(game); toast('Comment deleted')
+    } catch (err) { setError(err.message) }
+  }
+
   const count = comments ? comments.length : game.comments
   return (
     <Sheet
@@ -59,9 +68,19 @@ export default function CommentsSheet({ game, user, onClose, onAdded, onNeedSign
             <div className="u">
               <b>@{c.handle}{c.userId === game.creator.id && <span className="creator-tag">CREATOR</span>}</b>
               {timeAgo(c.createdAt)}
+              {c.hidden && <span className="pill soft">hidden</span>}
             </div>
             <p>{c.body}</p>
+            {menuFor === c.id && (
+              <div className="cm-menu">
+                {(c.userId === user?.id || game.creator.id === user?.id) && <button type="button" onClick={() => remove(c)}>Delete</button>}
+                {c.userId !== user?.id && <button type="button" onClick={() => onReport({ type: 'comment', id: c.id, label: c.body.slice(0, 40) })}>Report</button>}
+                {c.userId !== user?.id && <button type="button" className="danger" onClick={() => onBlock({ id: c.userId, handle: c.handle })}>Block @{c.handle}</button>}
+              </div>
+            )}
           </div>
+          <button type="button" className="cm-more" aria-label="Comment options" aria-expanded={menuFor === c.id}
+            onClick={() => { if (!user) { onNeedSignIn('Sign in to report or manage comments.'); return } setMenuFor((m) => (m === c.id ? null : c.id)) }}>⋯</button>
         </div>
       ))}
       <div ref={listEnd} />

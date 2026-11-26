@@ -2,7 +2,7 @@
 
 Swipe through tiny HTML games like reels. Every new creator's game gets its first 100 views guaranteed.
 
-Phases 1–3 are done: real accounts, likes, comments, follows, views, feedback and scores, plus **creator uploads** (a zip of the game + a trailer video), with every uploaded game running in a sandbox.
+Phases 1–4 are done: real accounts, likes, comments, follows, views, feedback and scores, plus **creator uploads** (a zip of the game + a trailer video), with every uploaded game running in a sandbox.
 Creators: see [CREATORS.md](CREATORS.md) for how to prepare a game.
 
 ## Run it on your computer
@@ -27,17 +27,19 @@ With no `.env` file the app runs in **demo mode**: everything works, but data is
 5. Open **Authentication → Sign In / Providers** and turn on **Allow anonymous sign-ins**. Visitors who haven't signed in get an invisible guest account, so their views count toward each game's boost.
 6. Open another new query, paste `supabase/migrations/0004_feed.sql` and click **Run**. This adds the ranked feed, play tracking and spam limits.
 7. Open another new query, paste `supabase/migrations/0005_feed_fix.sql` and click **Run**.
-8. Open another new query, paste `supabase/seed.sql` and click **Run**. This adds the 5 demo games and fictional creators.
-9. Open **Project Settings → API**. Copy the **Project URL** and the **anon public** key.
-10. In this folder, copy `.env.example` to `.env` and paste the two values:
+8. Open another new query, paste `supabase/migrations/0006_safety.sql` and click **Run**. This adds reports, blocking, moderation and terms acceptance.
+9. Make yourself a moderator: run `update public.profiles set role = 'admin' where handle = 'your-handle';` with your own handle. A **Open moderation** button then appears in your Profile.
+10. Open another new query, paste `supabase/seed.sql` and click **Run**. This adds the 5 demo games and fictional creators.
+11. Open **Project Settings → API**. Copy the **Project URL** and the **anon public** key.
+12. In this folder, copy `.env.example` to `.env` and paste the two values:
    ```
    VITE_SUPABASE_URL=https://xxxx.supabase.co
    VITE_SUPABASE_ANON_KEY=eyJ...
    ```
-11. Open **Authentication → URL Configuration**:
+13. Open **Authentication → URL Configuration**:
    - **Site URL**: `http://localhost:5173` (change it to your real domain when you deploy)
    - **Redirect URLs**: add `http://localhost:5173` and, later, your real domain
-12. Restart `npm run dev`. The demo label disappears and sign-in sends a real email link.
+14. Restart `npm run dev`. The demo label disappears and sign-in sends a real email link.
 
 ### Optional: Google sign-in
 In **Authentication → Providers → Google**, follow Supabase's steps to create a Google OAuth client and paste its ID and secret. The "Continue with Google" button works once that's done.
@@ -97,10 +99,19 @@ Push to GitHub, import the repo in [Vercel](https://vercel.com) or Cloudflare Pa
 
 A view counts once per person, and only after the trailer has been on screen for 3 seconds.
 
+## Safety and moderation
+
+- Every game and comment has a **⋯** menu with **Report** and **Block**. Reports go to moderators only.
+- If 3 different people report the same game or comment, it's hidden automatically until a moderator decides.
+- Moderators (profiles with `role = 'admin'`) get a moderation screen: hide or restore content, dismiss reports, suspend or unsuspend accounts. The database checks the role, so the screen can't be abused by others.
+- Suspended accounts can still play but can't post, comment, like, follow, report or upload.
+- Sign-up requires ticking "I'm 13 or older and agree to the Terms and Privacy Policy". Accounts made before this are asked once.
+- The Terms and Privacy Policy are plain-language drafts in `src/content/legal.js`. Put your contact email in `CONTACT_EMAIL` and have a lawyer review them before a public launch.
+
 ## Roadmap
 
 - **Phase 1:** accounts, database, social features ✅
 - **Phase 2:** creator uploads (zip + trailer), storage, sandboxed games ✅
 - **Phase 3:** ranked feed with the new-creator boost, 3-second views, guest views, spam limits ✅
-- **Phase 4:** reporting, moderation, terms and privacy policy
+- **Phase 4:** reports with auto-hide, blocking, moderation screen, suspensions, terms, privacy policy and 13+ age gate ✅ (have a lawyer review the drafts in `src/content/legal.js` before launch)
 - **Phase 5:** closed beta with seeded games

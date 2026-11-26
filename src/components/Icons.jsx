@@ -5,6 +5,7 @@ export const HeartBurst = ({ x, y }) => <svg className="burst" viewBox="0 0 24 2
 export const CommentIcon = () => <svg className="ico" viewBox="0 0 24 24"><path d="M4 5.5h16v11H10l-5 4v-4H4z" /></svg>
 export const ShareIcon = () => <svg className="ico" viewBox="0 0 24 24"><path d="M20.5 3.5 3.5 10l7 3 3 7z" /><path d="M10.5 13 20.5 3.5" /></svg>
 export const PlayIcon = () => <svg viewBox="0 0 24 24"><path d="M6 3.8v16.4L20 12z" /></svg>
+export const MoreIcon = () => <svg className="ico" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="18.5" cy="12" r="1.6" /></svg>
 export const CloseIcon = () => <svg className="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></svg>
 export const HomeIcon = () => <svg className="ico" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20h-5.5v-6h-5v6H4z" /></svg>
 export const PlusIcon = () => <svg className="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>

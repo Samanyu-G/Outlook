@@ -128,7 +128,8 @@ export const demoApi = {
   },
   async listComments(gameId) {
     await wait()
-    return db.comments.filter((c) => c.game_id === gameId).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((c) => {
+    const blocked = new Set((db.blocks || []).filter((b) => b.blocker_id === me()?.id).map((b) => b.blocked_id))
+    return db.comments.filter((c) => c.game_id === gameId && !blocked.has(c.user_id)).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((c) => {
       const p = db.profiles[c.user_id]
       return { id: c.id, body: c.body, createdAt: c.created_at, userId: c.user_id, handle: p?.handle ?? 'unknown', color: p?.avatar_color ?? '#888888' }
     })
@@ -155,6 +156,22 @@ export const demoApi = {
     db.plays.push({ user_id: uid, game_id: gameId, score }); save()
     return prev
   },
+  // Safety features in demo mode: reports and blocks stay in this browser; no moderation.
+  async acceptTerms() { if (me()) { db.profiles[me().id].terms_accepted_at = new Date().toISOString(); save() } },
+  async report() { needUser(); await wait() },
+  async block(userId) { needUser(); (db.blocks ||= []).push({ blocker_id: me().id, blocked_id: userId }); save() },
+  async unblock(userId) { db.blocks = (db.blocks || []).filter((b) => !(b.blocker_id === me().id && b.blocked_id === userId)); save() },
+  async listBlocked() { return (db.blocks || []).filter((b) => b.blocker_id === me()?.id).map((b) => db.profiles[b.blocked_id]).filter(Boolean) },
+  async deleteComment(id) {
+    const c = db.comments.find((x) => x.id === id)
+    const game = c && db.games.find((g) => g.id === c.game_id)
+    if (!c || (c.user_id !== me()?.id && game?.creator_id !== me()?.id)) throw new Error('You can only delete your own comments, or comments on your games.')
+    db.comments = db.comments.filter((x) => x.id !== id); save()
+  },
+  async listReports() { return [] },
+  async moderate() { throw new Error('Moderation needs the live database.') },
+  async setSuspended() { throw new Error('Moderation needs the live database.') },
+
   // Uploads need real storage, so they only work with Supabase connected.
   canUpload: false,
   async createGame() { throw new Error('Uploading needs the live database. Connect Supabase first (see README).') },

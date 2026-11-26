@@ -71,6 +71,16 @@ async function startGuest() {
   return currentUser
 }
 
+// People you've blocked (cached until you block or unblock someone).
+let blockedCache = null
+async function blockedIds() {
+  if (!isMember(currentUser)) return new Set()
+  if (blockedCache) return blockedCache
+  const { data, error } = await supabase.from('blocks').select('blocked_id').eq('blocker_id', currentUser.id)
+  blockedCache = new Set(error ? [] : data.map((r) => r.blocked_id)) // table missing before 0006: no blocks
+  return blockedCache
+}
+
 export const supabaseApi = {
   mode: 'live',
 
@@ -86,6 +96,7 @@ export const supabaseApi = {
   onAuthChange(cb) {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       currentUser = session?.user ?? null
+      blockedCache = null
       cb(currentUser)
     })
     return () => data.subscription.unsubscribe()
@@ -100,6 +111,7 @@ export const supabaseApi = {
   },
   async signOut() {
     must(await supabase.auth.signOut())
+    blockedCache = null
     await startGuest()
   },
 
@@ -171,13 +183,21 @@ export const supabaseApi = {
     else must(await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('creator_id', creatorId))
   },
   async listComments(gameId) {
-    const rows = must(await supabase
-      .from('comments')
-      .select('id, body, created_at, user_id, author:profiles(handle, avatar_color)')
-      .eq('game_id', gameId)
-      .order('created_at', { ascending: true })
-      .limit(200))
-    return rows.map((r) => ({ id: r.id, body: r.body, createdAt: r.created_at, userId: r.user_id, handle: r.author?.handle ?? 'unknown', color: r.author?.avatar_color ?? '#888888' }))
+    const [rows, blocked] = await Promise.all([
+      supabase.from('comments')
+        .select('*, author:profiles(handle, avatar_color)')
+        .eq('game_id', gameId)
+        .order('created_at', { ascending: true })
+        .limit(200).then(must),
+      blockedIds(),
+    ])
+    return rows
+      .filter((r) => !blocked.has(r.user_id))
+      .map((r) => ({ id: r.id, body: r.body, createdAt: r.created_at, userId: r.user_id, hidden: !!r.hidden, handle: r.author?.handle ?? 'unknown', color: r.author?.avatar_color ?? '#888888' }))
+  },
+  async deleteComment(id) {
+    const rows = must(await supabase.from('comments').delete().eq('id', id).select('id'))
+    if (!rows.length) throw new Error('You can only delete your own comments, or comments on your games.')
   },
   async addComment(gameId, body) {
     const r = must(await supabase
@@ -269,6 +289,58 @@ export const supabaseApi = {
     }
     if (row.trailer_path) await supabase.storage.from('trailers').remove([row.trailer_path])
     must(await supabase.from('games').delete().eq('id', id))
+  },
+
+  /* ---------- safety ---------- */
+  async acceptTerms() {
+    must(await supabase.rpc('accept_terms'))
+  },
+  async report(targetType, targetId, reason, details = '') {
+    const { error } = await supabase.from('reports').insert({ reporter_id: currentUser.id, target_type: targetType, target_id: targetId, reason, details: details.trim().slice(0, 500) })
+    if (error?.code === '23505') return // already reported by you: that's fine
+    if (error) throw new Error(error.message)
+  },
+  async block(userId) {
+    const { error } = await supabase.from('blocks').insert({ blocker_id: currentUser.id, blocked_id: userId })
+    if (error && error.code !== '23505') throw new Error(error.message)
+    blockedCache = null
+  },
+  async unblock(userId) {
+    must(await supabase.from('blocks').delete().eq('blocker_id', currentUser.id).eq('blocked_id', userId))
+    blockedCache = null
+  },
+  async listBlocked() {
+    const rows = must(await supabase.from('blocks').select('blocked:profiles!blocks_blocked_id_fkey(id, handle, display_name, avatar_color)').eq('blocker_id', currentUser.id))
+    return rows.map((r) => r.blocked).filter(Boolean)
+  },
+
+  /* ---------- moderation (admins only; the database checks this) ---------- */
+  async listReports() {
+    const reports = must(await supabase.from('reports').select('id, target_type, target_id, reason, details, created_at, reporter:profiles!reports_reporter_id_fkey(handle)')
+      .eq('status', 'open').order('created_at', { ascending: true }).limit(500))
+    const gameIds = [...new Set(reports.filter((r) => r.target_type === 'game').map((r) => r.target_id))]
+    const commentIds = [...new Set(reports.filter((r) => r.target_type === 'comment').map((r) => r.target_id))]
+    const [games, comments] = await Promise.all([
+      gameIds.length ? supabase.from('games').select('id, title, status, creator_id, creator:profiles!games_creator_id_fkey(handle, banned)').in('id', gameIds).then(must) : [],
+      commentIds.length ? supabase.from('comments').select('id, body, hidden, user_id, game_id, author:profiles(handle, banned)').in('id', commentIds).then(must) : [],
+    ])
+    const targets = {}
+    for (const g of games) targets['game:' + g.id] = { type: 'game', id: g.id, title: g.title, hidden: g.status === 'hidden', ownerId: g.creator_id, owner: g.creator?.handle, ownerSuspended: !!g.creator?.banned }
+    for (const c of comments) targets['comment:' + c.id] = { type: 'comment', id: c.id, body: c.body, hidden: c.hidden, ownerId: c.user_id, owner: c.author?.handle, ownerSuspended: !!c.author?.banned }
+    // Group reports by the thing that was reported, most-reported first.
+    const groups = {}
+    for (const r of reports) {
+      const key = r.target_type + ':' + r.target_id
+      const t = targets[key] || { type: r.target_type, id: r.target_id, missing: true }
+      ;(groups[key] ||= { ...t, reports: [] }).reports.push({ id: r.id, reason: r.reason, details: r.details, createdAt: r.created_at, by: r.reporter?.handle })
+    }
+    return Object.values(groups).sort((a, b) => b.reports.length - a.reports.length)
+  },
+  async moderate(type, id, action) {
+    must(await supabase.rpc('moderate', { p_type: type, p_id: id, p_action: action }))
+  },
+  async setSuspended(userId, suspended) {
+    must(await supabase.rpc('set_suspended', { p_user: userId, p_suspended: suspended }))
   },
 
   /* ---------- profile screen ---------- */
