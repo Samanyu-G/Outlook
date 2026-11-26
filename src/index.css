@@ -58,7 +58,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .tabs { position: absolute; top: 10px; left: 0; right: 0; z-index: 5; display: flex; justify-content: center; gap: 4px; pointer-events: none; }
 .tabs button { pointer-events: auto; padding: 7px 12px; border-radius: 999px; font-weight: 700; font-size: 14px; color: rgba(255, 250, 243, .82); text-shadow: 0 1px 6px rgba(var(--scrim), .5); }
 .tabs button[aria-pressed="true"] { color: var(--text); background: rgba(255, 250, 243, .82); text-shadow: none; backdrop-filter: blur(8px); }
-.chip-trailer { position: absolute; top: 56px; left: 16px; font: 700 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; padding: 6px 8px; border-radius: 6px; background: rgba(255, 250, 243, .8); color: var(--text); display: flex; align-items: center; gap: 6px; }
+video.trailer { object-fit: cover; background: #000; }
+.chips-top { position: absolute; top: 56px; left: 16px; right: 16px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
+.chip-trailer { font: 700 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; padding: 6px 8px; border-radius: 6px; background: rgba(255, 250, 243, .8); color: var(--text); display: flex; align-items: center; gap: 6px; }
 .chip-trailer i { width: 7px; height: 7px; border-radius: 50%; background: var(--heart); animation: blink 1.6s infinite; }
 @keyframes blink { 50% { opacity: .3; } }
 
@@ -205,3 +207,40 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .toast { position: absolute; top: calc(58px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 50; background: var(--text); color: var(--panel); font-weight: 700; font-size: 13px; padding: 10px 14px; border-radius: 12px; max-width: calc(100% - 32px); text-align: center; animation: fade .2s; box-shadow: 0 8px 24px rgba(var(--scrim), .25); }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ---------- Phase 2: uploaded games ---------- */
+/* Uploaded games get a solid header bar so the game's own top UI isn't covered. */
+.player.framed { display: flex; flex-direction: column; background: #000; }
+.player.framed .p-head { position: relative; top: auto; order: -1; flex: none; padding: 10px 14px; background: var(--panel); color: var(--text); border-bottom: 1px solid var(--line); }
+.player.framed .p-title { text-shadow: none; }
+.player.framed .p-title small { color: var(--muted); opacity: 1; }
+.player.framed .p-close { background: var(--panel-2); }
+.game-frame { flex: 1; min-height: 0; width: 100%; border: 0; display: block; background: #000; }
+.frame-msg { flex: 1; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--on-media); background: #000; }
+.p-rate { padding: 8px 14px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13px; }
+.p-ask { margin: 0; font-family: var(--display); font-size: 20px; }
+
+/* Upload form */
+.drop.ok { border-style: solid; border-color: var(--sage); background: rgba(143, 179, 156, .12); }
+.drop.bad { border-style: solid; border-color: var(--danger); }
+.drop > div { min-width: 0; }
+.drop b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drop .thumb { width: 40px; height: 56px; object-fit: cover; border-radius: 8px; flex: none; background: var(--line); }
+.warn { margin: 0; font-size: 12px; line-height: 1.45; color: #8a5a1f; background: rgba(242, 217, 141, .35); padding: 8px 10px; border-radius: 10px; }
+.guide { font-size: 13px; line-height: 1.5; background: var(--panel-2); border-radius: 12px; padding: 10px 12px; }
+.guide summary { font-weight: 700; cursor: pointer; }
+.guide ul { margin: 8px 0 0; padding-left: 18px; color: var(--text); }
+.guide code { font-family: var(--mono); font-size: 12px; background: rgba(92, 74, 60, .08); padding: 1px 4px; border-radius: 4px; }
+.progress { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; }
+.progress .bar { height: 8px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+.progress .bar i { display: block; height: 100%; background: var(--sage); border-radius: 4px; transition: width .2s; }
+
+/* Your games (profile) */
+.mygames { display: flex; flex-direction: column; gap: 10px; }
+.mygame { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--panel-2); }
+.mygame > div { flex: 1; min-width: 0; }
+.mygame b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mygame small { color: var(--muted); font-size: 12px; }
+.mygame button { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); font-size: 12px; font-weight: 700; background: var(--panel); }
+.mygame button.danger { border-color: var(--danger); color: var(--danger); }
+.pill { font: 700 10px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 6px; border-radius: 6px; background: rgba(242, 217, 141, .5); color: #6b4e14; margin-left: 6px; vertical-align: 1px; }

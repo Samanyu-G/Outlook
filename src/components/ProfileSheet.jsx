@@ -2,7 +2,56 @@ import { useEffect, useState } from 'react'
 import { api, initials } from '../lib/api.js'
 import Sheet from './Sheet.jsx'
 
-export default function ProfileSheet({ onClose, onUnfollow, onProfileChanged, toast }) {
+function MyGames({ onChanged, toast }) {
+  const [games, setGames] = useState(null)
+  const [confirming, setConfirming] = useState(null)
+  const [busy, setBusy] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => { api.listMyGames().then(setGames).catch((e) => setError(e.message)) }, [])
+
+  async function remove(g) {
+    setBusy(g.id); setError('')
+    try {
+      await api.deleteGame(g.id)
+      setGames((list) => list.filter((x) => x.id !== g.id))
+      toast(`Deleted “${g.title}”`); onChanged()
+    } catch (e) { setError(e.message) } finally { setBusy(null); setConfirming(null) }
+  }
+
+  if (!api.canUpload) return null
+  return (
+    <>
+      <h4 className="sub-h">Your games</h4>
+      {error && <p className="err">{error}</p>}
+      {!games && !error && <p className="muted">Loading…</p>}
+      {games && !games.length && <p className="muted">You haven’t uploaded a game yet. Tap + to share your first one.</p>}
+      {games?.length > 0 && (
+        <div className="mygames">
+          {games.map((g) => (
+            <div className="mygame" key={g.id}>
+              <div>
+                <b>{g.title}{g.status !== 'published' && <span className="pill">{g.status}</span>}</b>
+                <small>{g.views} views · {g.likes} likes · {g.comments} comments</small>
+              </div>
+              {g.builtin ? null : confirming === g.id ? (
+                <>
+                  <button type="button" className="danger" disabled={busy === g.id} onClick={() => remove(g)}>{busy === g.id ? 'Deleting…' : 'Delete for good'}</button>
+                  <button type="button" disabled={busy === g.id} onClick={() => setConfirming(null)}>Cancel</button>
+                </>
+              ) : (
+                <button type="button" onClick={() => setConfirming(g.id)}>Delete</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {confirming && <p className="muted small">Deleting removes the game, its files, likes and comments. It can’t be undone.</p>}
+    </>
+  )
+}
+
+export default function ProfileSheet({ onClose, onUnfollow, onProfileChanged, onGamesChanged, toast }) {
   const [profile, setProfile] = useState(null)
   const [stats, setStats] = useState(null)
   const [form, setForm] = useState(null)
@@ -71,6 +120,7 @@ export default function ProfileSheet({ onClose, onUnfollow, onProfileChanged, to
             </label>
             <button type="submit" className="btn primary" disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save profile'}</button>
           </form>
+          <MyGames onChanged={onGamesChanged} toast={toast} />
           <h4 className="sub-h">Following</h4>
           {stats?.following.length ? (
             <div className="flist">

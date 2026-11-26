@@ -27,14 +27,31 @@ function TrailerCanvas({ gameKey, active }) {
   return <canvas ref={canvasRef} className="trailer" aria-hidden="true" />
 }
 
+/* Uploaded games: the creator's trailer video. Plays only while on screen. */
+function VideoTrailer({ src, active }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    const v = ref.current
+    if (!v) return
+    if (active) v.play().catch(() => {})
+    else v.pause()
+  }, [active])
+  return <video ref={ref} className="trailer" src={src} muted loop playsInline preload={active ? 'auto' : 'metadata'} aria-hidden="true" />
+}
+
 function GameCard({ game, active, showCoach, onPlay, onLike, onFollow, onComments, onShare, bursts }) {
   const c = game.creator
   const [captionOpen, setCaptionOpen] = useState(false)
   return (
     <>
-      <TrailerCanvas gameKey={game.builtinKey} active={active} />
+      {game.builtinKey
+        ? <TrailerCanvas gameKey={game.builtinKey} active={active} />
+        : <VideoTrailer src={game.trailerUrl} active={active} />}
       <div className="shade" />
-      <span className="chip-trailer"><i />Trailer</span>
+      <div className="chips-top">
+        <span className="chip-trailer"><i />Trailer</span>
+        {game.touchFriendly === false && <span className="chip-trailer">Needs keyboard</span>}
+      </div>
       <button type="button" className="play" onClick={() => onPlay(game)} aria-label={`Play ${game.title}`}>
         <span className="disc"><PlayIcon /></span>
         <span className="lbl">Tap to play</span>

@@ -153,6 +153,12 @@ export const demoApi = {
     db.plays.push({ user_id: uid, game_id: gameId, score }); save()
     return prev
   },
+  // Uploads need real storage, so they only work with Supabase connected.
+  canUpload: false,
+  async createGame() { throw new Error('Uploading needs the live database. Connect Supabase first (see README).') },
+  async listMyGames() { return [] },
+  async deleteGame() { throw new Error('Not available in demo mode.') },
+
   async getMyStats() {
     const uid = me().id
     return {

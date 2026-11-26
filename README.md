@@ -2,8 +2,8 @@
 
 Swipe through tiny HTML games like reels. Every new creator's game gets its first 100 views guaranteed.
 
-This is **Phase 1**: real accounts, real database, real likes, comments, follows, views, feedback and scores.
-The 5 games are still built into the app; creator uploads come in Phase 2.
+Phases 1 and 2 are done: real accounts, likes, comments, follows, views, feedback and scores, plus **creator uploads** (a zip of the game + a trailer video), with every uploaded game running in a sandbox.
+Creators: see [CREATORS.md](CREATORS.md) for how to prepare a game.
 
 ## Run it on your computer
 
@@ -23,17 +23,18 @@ With no `.env` file the app runs in **demo mode**: everything works, but data is
 1. Create a free account and a new project at [supabase.com](https://supabase.com). Choose a region close to your players and save the database password somewhere safe.
 2. In the project, open **SQL Editor → New query**. Paste all of `supabase/migrations/0001_init.sql` and click **Run**.
 3. Open another new query, paste `supabase/migrations/0002_grants.sql` and click **Run**. This gives the app permission to use the tables (the security rules still decide which rows).
-4. Open another new query, paste `supabase/seed.sql` and click **Run**. This adds the 5 demo games and fictional creators.
-5. Open **Project Settings → API**. Copy the **Project URL** and the **anon public** key.
-6. In this folder, copy `.env.example` to `.env` and paste the two values:
+4. Open another new query, paste `supabase/migrations/0003_uploads.sql` and click **Run**. This creates the storage for uploaded games and trailers, with rules so creators can only write to their own folder.
+5. Open another new query, paste `supabase/seed.sql` and click **Run**. This adds the 5 demo games and fictional creators.
+6. Open **Project Settings → API**. Copy the **Project URL** and the **anon public** key.
+7. In this folder, copy `.env.example` to `.env` and paste the two values:
    ```
    VITE_SUPABASE_URL=https://xxxx.supabase.co
    VITE_SUPABASE_ANON_KEY=eyJ...
    ```
-7. Open **Authentication → URL Configuration**:
+8. Open **Authentication → URL Configuration**:
    - **Site URL**: `http://localhost:5173` (change it to your real domain when you deploy)
    - **Redirect URLs**: add `http://localhost:5173` and, later, your real domain
-8. Restart `npm run dev`. The demo label disappears and sign-in sends a real email link.
+9. Restart `npm run dev`. The demo label disappears and sign-in sends a real email link.
 
 ### Optional: Google sign-in
 In **Authentication → Providers → Google**, follow Supabase's steps to create a Google OAuth client and paste its ID and secret. The "Continue with Google" button works once that's done.
@@ -53,6 +54,7 @@ src/
   lib/
     supabase.js              Creates the Supabase client from .env (or switches to demo mode)
     api.js                   The ONE import the UI uses for data. Picks live or demo backend
+    uploads.js               Checks a game zip and trailer on the phone before uploading
     supabaseApi.js           Real backend: every database call lives here
     demoApi.js               Same functions, saved in localStorage
   games/
@@ -61,10 +63,11 @@ src/
   components/
     Feed.jsx                 The swipe feed, trailers, double-tap like, swipe-left to play
     Player.jsx               Full-screen play mode, score, feedback chips
+    FrameGame.jsx            Runs an uploaded game inside a locked-down sandbox frame
     CommentsSheet.jsx        Read and post comments
     AuthSheet.jsx            Sign in with an email link or Google
     ProfileSheet.jsx         Edit handle/name/bio, your stats, who you follow
-    UploadSheet.jsx          Preview of the Phase 2 upload form
+    UploadSheet.jsx          Upload a game: checks the zip and trailer, shows progress
     Sheet.jsx, Icons.jsx     Shared pieces
 public/
   manifest.webmanifest, sw.js, icons   Make it installable ("Add to Home screen")
@@ -83,8 +86,8 @@ Push to GitHub, import the repo in [Vercel](https://vercel.com) or Cloudflare Pa
 
 ## Roadmap
 
-- **Phase 1 (this):** accounts, database, social features ✅
-- **Phase 2:** creator uploads (zip + trailer), storage, sandboxed game hosting on a separate domain
+- **Phase 1:** accounts, database, social features ✅
+- **Phase 2:** creator uploads (zip + trailer), storage, sandboxed games ✅
 - **Phase 3:** the real feed algorithm, fair view counting, abuse limits
 - **Phase 4:** reporting, moderation, terms and privacy policy
 - **Phase 5:** closed beta with seeded games

@@ -10,6 +10,30 @@ function must({ data, error }) {
   return data
 }
 
+const publicUrl = (bucket, path) => (path ? supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl : null)
+
+// Uploads run a few at a time: faster than one by one, gentler than all at once.
+async function runPool(items, size, worker) {
+  let next = 0
+  const lanes = Array.from({ length: Math.min(size, items.length) }, async () => {
+    while (next < items.length) { const item = items[next++]; await worker(item) }
+  })
+  await Promise.all(lanes)
+}
+
+// Storage can't list a folder recursively, so we walk it.
+async function listAllFiles(bucket, prefix) {
+  const out = []
+  const { data, error } = await supabase.storage.from(bucket).list(prefix.replace(/\/$/, ''), { limit: 1000 })
+  if (error) throw new Error(error.message)
+  for (const item of data) {
+    const path = `${prefix.replace(/\/$/, '')}/${item.name}`
+    if (item.id) out.push(path) // files have an id, folders don't
+    else out.push(...await listAllFiles(bucket, path))
+  }
+  return out
+}
+
 function toGame(row, likedIds, followingIds) {
   return {
     id: row.id,
@@ -17,6 +41,9 @@ function toGame(row, likedIds, followingIds) {
     description: row.description,
     tags: row.tags || [],
     builtinKey: row.builtin_key,
+    bundleUrl: publicUrl('games', row.bundle_path),
+    trailerUrl: publicUrl('trailers', row.trailer_path),
+    touchFriendly: row.touch_friendly,
     createdAt: row.created_at,
     creator: {
       id: row.creator_id,
@@ -151,6 +178,74 @@ export const supabaseApi = {
     const prev = must(await supabase.from('plays').select('score').eq('user_id', currentUser.id).eq('game_id', gameId).order('score', { ascending: false }).limit(1))
     must(await supabase.from('plays').insert({ user_id: currentUser.id, game_id: gameId, score }))
     return prev[0]?.score ?? 0
+  },
+
+  /* ---------- creator uploads ---------- */
+  canUpload: true,
+
+  /**
+   * Publishes a game. Steps: save it as a hidden draft, upload the trailer and
+   * every game file into your own folder, then flip it to "published".
+   * If anything fails, everything uploaded so far is removed again.
+   */
+  async createGame({ title, description, tags, touchFriendly, pkg, trailer }, onProgress = () => {}) {
+    const uid = currentUser.id
+    const id = crypto.randomUUID()
+    const folder = `${uid}/${id}/`
+    const tExt = trailer.name.split('.').pop().toLowerCase()
+    const trailerPath = `${folder}trailer.${tExt}`
+
+    must(await supabase.from('games').insert({
+      id, creator_id: uid, title: title.trim(), description: description.trim(), tags,
+      touch_friendly: touchFriendly, bundle_path: folder, trailer_path: trailerPath, status: 'draft',
+    }))
+
+    const total = pkg.totalBytes + trailer.size
+    let done = 0
+    const step = (n) => { done += n; onProgress(Math.min(1, done / total)) }
+    try {
+      const up = async (bucket, path, body, contentType) => {
+        const { error } = await supabase.storage.from(bucket).upload(path, body, { contentType, upsert: false, cacheControl: '3600' })
+        if (error) throw new Error(`Couldn’t upload ${path.slice(folder.length) || path}: ${error.message}`)
+      }
+      await up('trailers', trailerPath, trailer, trailer.type || 'video/mp4')
+      step(trailer.size)
+      await runPool(pkg.files, 4, async (f) => {
+        await up('games', folder + f.path, new Blob([f.data], { type: f.type }), f.type)
+        step(f.size)
+      })
+      must(await supabase.from('games').update({ status: 'published' }).eq('id', id))
+      return id
+    } catch (e) {
+      await this.deleteGame(id).catch(() => {})
+      throw e
+    }
+  },
+
+  /** Your own games (published and drafts) with their counts. */
+  async listMyGames() {
+    const rows = must(await supabase.from('games').select('id, title, status, created_at, builtin_key')
+      .eq('creator_id', currentUser.id).order('created_at', { ascending: false }))
+    if (!rows.length) return []
+    const counts = must(await supabase.from('game_feed').select('id, like_count, comment_count, view_count').in('id', rows.map((r) => r.id)))
+    const byId = Object.fromEntries(counts.map((c) => [c.id, c]))
+    return rows.map((r) => ({ id: r.id, title: r.title, status: r.status, createdAt: r.created_at, builtin: !!r.builtin_key,
+      likes: byId[r.id]?.like_count ?? 0, comments: byId[r.id]?.comment_count ?? 0, views: byId[r.id]?.view_count ?? 0 }))
+  },
+
+  /** Deletes a game and all of its files. Likes, comments and views go with it. */
+  async deleteGame(id) {
+    const row = must(await supabase.from('games').select('bundle_path, trailer_path').eq('id', id).maybeSingle())
+    if (!row) return
+    if (row.bundle_path) {
+      const paths = await listAllFiles('games', row.bundle_path)
+      for (let i = 0; i < paths.length; i += 100) {
+        const { error } = await supabase.storage.from('games').remove(paths.slice(i, i + 100))
+        if (error) throw new Error(error.message)
+      }
+    }
+    if (row.trailer_path) await supabase.storage.from('trailers').remove([row.trailer_path])
+    must(await supabase.from('games').delete().eq('id', id))
   },
 
   /* ---------- profile screen ---------- */

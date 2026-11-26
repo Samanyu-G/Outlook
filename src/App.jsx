@@ -163,13 +163,19 @@ export default function App() {
           <ProfileSheet
             onClose={closeSheet} toast={toast}
             onProfileChanged={loadFeed}
+            onGamesChanged={loadFeed}
             onUnfollow={(creatorId) => {
               const g = games.find((x) => x.creator.id === creatorId)
               return setFollow(creatorId, g?.creator.handle ?? 'creator', false)
             }}
           />
         )}
-        {sheet?.type === 'upload' && <UploadSheet onClose={closeSheet} toast={toast} />}
+        {sheet?.type === 'upload' && (
+          <UploadSheet
+            onClose={closeSheet} toast={toast}
+            onPublished={() => { setSheet(null); if (tab === 'fresh') loadFeed(); else setTab('fresh') }}
+          />
+        )}
 
         {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
       </div>
