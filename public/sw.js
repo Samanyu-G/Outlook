@@ -1,7 +1,7 @@
 // Minimal service worker: makes the app installable and keeps the app shell
 // available on flaky mobile connections. Data (games, likes, comments) always
 // comes from the network so it's never stale.
-const CACHE = 'outlook-shell-v2'
+const CACHE = 'nativity-shell-v3'
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icon.svg'])))

@@ -29,7 +29,7 @@ export default function AuthSheet({ reason, onClose }) {
   }
 
   return (
-    <Sheet title="Join Outlook" onClose={onClose}>
+    <Sheet title="Join Nativity" onClose={onClose}>
       {reason && <p className="muted">{reason}</p>}
       {sentTo ? (
         <div className="note">

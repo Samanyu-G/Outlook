@@ -2,7 +2,7 @@
 // browser's localStorage. Used automatically when .env has no Supabase keys,
 // so you can try the app (and so tests work offline). Nothing here is shared.
 
-const KEY = 'outlook:demo:v2'
+const KEY = 'nativity:demo:v1'
 const COLORS = ['#f4b6a0', '#b9cde6', '#b7d3c0', '#f2d98d', '#e7b3c0']
 const ago = (ms) => new Date(Date.now() - ms).toISOString()
 const H = 3600e3, D = 24 * H

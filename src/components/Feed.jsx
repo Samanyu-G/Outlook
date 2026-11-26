@@ -84,7 +84,7 @@ function GameCard({ game, active, showCoach, onPlay, onLike, onFollow, onComment
   )
 }
 
-const COACH_KEY = 'outlook:coach-seen'
+const COACH_KEY = 'nativity:coach-seen'
 const readCoach = () => { try { return localStorage.getItem(COACH_KEY) === '1' } catch { return true } }
 
 export default function Feed({ games, loading, error, tab, paused, onPlay, onLike, onFollow, onComments, onShare, onView, onRetry, onFindFresh }) {

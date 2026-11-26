@@ -1,4 +1,4 @@
--- Outlook: demo content so the feed isn't empty on day one.
+-- Nativity: demo content so the feed isn't empty on day one.
 -- Run AFTER 0001_init.sql, in the same SQL Editor. Safe to skip in production.
 --
 -- These are fictional creators. They are inserted as auth users that can never

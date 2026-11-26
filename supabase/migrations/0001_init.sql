@@ -1,4 +1,4 @@
--- Outlook: Phase 1 database
+-- Nativity: Phase 1 database
 -- Run this once in Supabase: Dashboard -> SQL Editor -> New query -> paste -> Run.
 --
 -- Big idea: every table has Row Level Security (RLS) turned on. The browser talks

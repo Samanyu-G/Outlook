@@ -1,4 +1,4 @@
-# Outlook
+# Nativity
 
 Swipe through tiny HTML games like reels. Every new creator's game gets its first 100 views guaranteed.
 

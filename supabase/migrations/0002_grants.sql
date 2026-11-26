@@ -1,4 +1,4 @@
--- Outlook: table access for the app.
+-- Nativity: table access for the app.
 -- Run this once in Supabase: SQL Editor -> New query -> paste -> Run.
 --
 -- Two layers of security work together:

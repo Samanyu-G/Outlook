@@ -85,7 +85,7 @@ export default function App() {
   }
 
   function onShare(game) {
-    const text = `Play ${game.title} by @${game.creator.handle} on Outlook: ${window.location.origin}`
+    const text = `Play ${game.title} by @${game.creator.handle} on Nativity: ${window.location.origin}`
     if (navigator.share) { navigator.share({ title: game.title, text }).catch(() => {}); return }
     navigator.clipboard?.writeText(text).then(() => toast('Share message copied'), () => toast('Couldn’t copy. Try again.'))
   }
@@ -101,7 +101,7 @@ export default function App() {
   return (
     <>
       <aside className="desk-note">
-        <h1>Out<span>look</span></h1>
+        <h1>Nativity<span>.</span></h1>
         <p>Swipe through tiny games the way you swipe through reels. Every new creator gets their first {BOOST_VIEWS} views guaranteed.</p>
         <p><b>Built for phones.</b> Open this on your phone, or scroll and drag inside the frame.</p>
         {api.mode === 'demo' && <p className="demo-pill">Demo mode · data stays in this browser</p>}
