@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, BOOST_VIEWS } from './lib/api.js'
+import { api, BOOST_VIEWS, isMember } from './lib/api.js'
 import Feed from './components/Feed.jsx'
 import Player from './components/Player.jsx'
 import CommentsSheet from './components/CommentsSheet.jsx'
@@ -21,6 +21,8 @@ export default function App() {
   const [playingId, setPlayingId] = useState(null)
   const [toastMsg, setToastMsg] = useState('')
   const toastTimer = useRef(null)
+  // Guests have a session (so their views count) but act as signed out everywhere else.
+  const member = isMember(user) ? user : null
 
   const toast = useCallback((msg) => {
     setToastMsg(msg)
@@ -33,17 +35,17 @@ export default function App() {
     api.getUser().then((u) => { setUser(u); setAuthReady(true) })
     return api.onAuthChange((u) => {
       setUser(u)
-      // Close the sign-in sheet once sign-in succeeds.
-      if (u) setSheet((s) => (s?.type === 'auth' ? null : s))
+      // Close the sign-in sheet once a real sign-in succeeds.
+      if (isMember(u)) setSheet((s) => (s?.type === 'auth' ? null : s))
     })
   }, [])
 
   // Returns true if signed in; otherwise opens the sign-in sheet.
   const requireUser = useCallback((reason) => {
-    if (user) return true
+    if (member) return true
     setSheet({ type: 'auth', reason })
     return false
-  }, [user])
+  }, [member])
 
   /* ---------- feed ---------- */
   const loadFeed = useCallback(async () => {
@@ -80,7 +82,7 @@ export default function App() {
 
   function onFollow(game) {
     if (!requireUser('Sign in to follow creators.')) return
-    if (game.creator.id === user.id) { toast('This is your game.'); return }
+    if (game.creator.id === member.id) { toast('This is your game.'); return }
     setFollow(game.creator.id, game.creator.handle, !game.following)
   }
 
@@ -134,14 +136,14 @@ export default function App() {
             <span className="up"><PlusIcon /></span>
           </button>
           <button type="button" aria-current={sheet?.type === 'profile' ? 'page' : undefined} onClick={() => { if (requireUser('Sign in to see your profile.')) setSheet({ type: 'profile' }) }}>
-            <UserIcon />{user ? 'Profile' : 'Sign in'}
+            <UserIcon />{member ? 'Profile' : 'Sign in'}
           </button>
         </nav>
 
         {playing && (
           <Player
             key={playing.id}
-            game={playing} user={user}
+            game={playing} user={member}
             onClose={closePlayer}
             onLike={onLike} onFollow={onFollow}
             onComments={(g) => setSheet({ type: 'comments', game: g })}
@@ -153,13 +155,13 @@ export default function App() {
 
         {sheet?.type === 'comments' && (
           <CommentsSheet
-            game={games.find((g) => g.id === sheet.game.id) || sheet.game} user={user} onClose={closeSheet}
+            game={games.find((g) => g.id === sheet.game.id) || sheet.game} user={member} onClose={closeSheet}
             onAdded={(g) => patchGame(g.id, (x) => ({ ...x, comments: x.comments + 1 }))}
             onNeedSignIn={(reason) => setSheet({ type: 'auth', reason })}
           />
         )}
         {sheet?.type === 'auth' && <AuthSheet reason={sheet.reason} onClose={closeSheet} />}
-        {sheet?.type === 'profile' && user && (
+        {sheet?.type === 'profile' && member && (
           <ProfileSheet
             onClose={closeSheet} toast={toast}
             onProfileChanged={loadFeed}

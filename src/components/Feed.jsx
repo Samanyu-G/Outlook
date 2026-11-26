@@ -125,10 +125,18 @@ export default function Feed({ games, loading, error, tab, paused, onPlay, onLik
   // New list (tab switch / refresh) -> back to the top.
   useEffect(() => { feedRef.current?.scrollTo({ top: 0 }) }, [tab])
 
-  // Count a view once per card per session, and hide the coach mark after the first swipe.
+  // A view only counts once the trailer has been on screen for 3 seconds.
+  // Swiping past quickly doesn't count, so creators get honest numbers.
+  useEffect(() => {
+    if (!activeId || paused || seenRef.current.has(activeId)) return
+    const id = activeId
+    const timer = setTimeout(() => { seenRef.current.add(id); onView(id) }, 3000)
+    return () => clearTimeout(timer)
+  }, [activeId, paused]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Hide the "swipe up" hint after the first swipe.
   useEffect(() => {
     if (!activeId) return
-    if (!seenRef.current.has(activeId)) { seenRef.current.add(activeId); onView(activeId) }
     if (!coachSeen && games.length && activeId !== games[0].id) {
       setCoachSeen(true)
       try { localStorage.setItem(COACH_KEY, '1') } catch { /* ignore */ }

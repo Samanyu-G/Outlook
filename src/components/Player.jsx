@@ -51,6 +51,9 @@ export default function Player({ game, user, onClose, onLike, onFollow, onCommen
     return () => r.destroy()
   }, [game.id, game.builtinKey])
 
+  // Tell the ranking that someone tapped Play (guests count too).
+  useEffect(() => { api.recordPlayStart(game.id).catch(() => {}) }, [game.id])
+
   useEffect(() => {
     if (!user) return
     api.getMyFeedback(game.id).then((tags) => { if (tags) { setChips(tags); setSentChips(tags) } }).catch(() => {})
@@ -75,6 +78,7 @@ export default function Player({ game, user, onClose, onLike, onFollow, onCommen
 
   function again() {
     setOver(null); setScore(0)
+    api.recordPlayStart(game.id).catch(() => {})
     if (uploaded) setRunKey((k) => k + 1)
     else runnerRef.current?.restart()
   }

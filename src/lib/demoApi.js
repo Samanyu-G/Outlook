@@ -111,6 +111,8 @@ export const demoApi = {
     if (!db.views.some((v) => v.user_id === uid && v.game_id === gameId)) { db.views.push({ user_id: uid, game_id: gameId }); save() }
   },
 
+  async recordPlayStart() { /* demo mode doesn't rank the feed */ },
+
   async setLike(gameId, on) {
     needUser(); const uid = me().id
     db.likes = db.likes.filter((l) => !(l.user_id === uid && l.game_id === gameId))

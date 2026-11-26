@@ -61,6 +61,16 @@ function toGame(row, likedIds, followingIds) {
   }
 }
 
+// Guests are anonymous accounts: they can watch and play, nothing else.
+export const isMember = (user) => !!user && !user.is_anonymous
+
+async function startGuest() {
+  const { data, error } = await supabase.auth.signInAnonymously()
+  if (error) return null
+  currentUser = data.user
+  return currentUser
+}
+
 export const supabaseApi = {
   mode: 'live',
 
@@ -68,6 +78,9 @@ export const supabaseApi = {
   async getUser() {
     const { data } = await supabase.auth.getSession()
     currentUser = data.session?.user ?? null
+    // No session yet? Start a silent guest session so this visitor's views count.
+    // (Needs "Allow anonymous sign-ins" on in Supabase; if it's off we just continue.)
+    if (!currentUser) currentUser = await startGuest()
     return currentUser
   },
   onAuthChange(cb) {
@@ -87,6 +100,7 @@ export const supabaseApi = {
   },
   async signOut() {
     must(await supabase.auth.signOut())
+    await startGuest()
   },
 
   /* ---------- profile ---------- */
@@ -110,31 +124,40 @@ export const supabaseApi = {
   /* ---------- feed ---------- */
   async listFeed(tab) {
     let followingIds = new Set()
-    if (currentUser) {
+    if (isMember(currentUser)) {
       const rows = must(await supabase.from('follows').select('creator_id').eq('follower_id', currentUser.id))
       followingIds = new Set(rows.map((r) => r.creator_id))
     }
     if (tab === 'following' && followingIds.size === 0) return []
 
-    let q = supabase.from('game_feed').select('*')
-    if (tab === 'following') q = q.in('creator_id', [...followingIds])
-    // Phase 1 ranking is simple on purpose. Phase 3 replaces this with the real algorithm.
-    q = tab === 'fresh'
-      ? q.order('view_count', { ascending: true }).order('created_at', { ascending: false })
-      : q.order('created_at', { ascending: false })
-    const rows = must(await q.limit(50))
+    // The order is decided in the database by ranked_feed() (see 0004_feed.sql).
+    let res = await supabase.rpc('ranked_feed', { p_tab: tab, p_limit: 50 })
+    if (res.error?.code === 'PGRST202') {
+      // ranked_feed() isn't installed yet (0004_feed.sql not run): simple newest-first order.
+      let q = supabase.from('game_feed').select('*')
+      if (tab === 'following') q = q.in('creator_id', [...followingIds])
+      q = tab === 'fresh' ? q.order('view_count', { ascending: true }) : q.order('created_at', { ascending: false })
+      res = await q.limit(50)
+    }
+    const rows = must(res)
 
     let likedIds = new Set()
-    if (currentUser && rows.length) {
+    if (isMember(currentUser) && rows.length) {
       const liked = must(await supabase.from('likes').select('game_id').eq('user_id', currentUser.id).in('game_id', rows.map((r) => r.id)))
       likedIds = new Set(liked.map((r) => r.game_id))
     }
     return rows.map((r) => toGame(r, likedIds, followingIds))
   },
 
+  // Called after a trailer has been on screen for 3 seconds. Guests count too.
   async recordView(gameId) {
-    if (!currentUser) return // Phase 1: only signed-in views count.
-    await supabase.from('views').upsert({ user_id: currentUser.id, game_id: gameId }, { onConflict: 'user_id,game_id', ignoreDuplicates: true })
+    if (!currentUser) return
+    must(await supabase.rpc('record_view', { p_game: gameId }))
+  },
+  // Called when someone taps Play or Play again.
+  async recordPlayStart(gameId) {
+    if (!currentUser) return
+    must(await supabase.rpc('record_play_start', { p_game: gameId }))
   },
 
   /* ---------- social ---------- */
@@ -168,7 +191,7 @@ export const supabaseApi = {
     must(await supabase.from('feedback').upsert({ user_id: currentUser.id, game_id: gameId, tags, updated_at: new Date().toISOString() }, { onConflict: 'user_id,game_id' }))
   },
   async getMyFeedback(gameId) {
-    if (!currentUser) return null
+    if (!isMember(currentUser)) return null
     const row = must(await supabase.from('feedback').select('tags').eq('user_id', currentUser.id).eq('game_id', gameId).maybeSingle())
     return row?.tags ?? null
   },
@@ -227,10 +250,10 @@ export const supabaseApi = {
     const rows = must(await supabase.from('games').select('id, title, status, created_at, builtin_key')
       .eq('creator_id', currentUser.id).order('created_at', { ascending: false }))
     if (!rows.length) return []
-    const counts = must(await supabase.from('game_feed').select('id, like_count, comment_count, view_count').in('id', rows.map((r) => r.id)))
+    const counts = must(await supabase.from('game_feed').select('*').in('id', rows.map((r) => r.id)))
     const byId = Object.fromEntries(counts.map((c) => [c.id, c]))
     return rows.map((r) => ({ id: r.id, title: r.title, status: r.status, createdAt: r.created_at, builtin: !!r.builtin_key,
-      likes: byId[r.id]?.like_count ?? 0, comments: byId[r.id]?.comment_count ?? 0, views: byId[r.id]?.view_count ?? 0 }))
+      likes: byId[r.id]?.like_count ?? 0, comments: byId[r.id]?.comment_count ?? 0, views: byId[r.id]?.view_count ?? 0, players: byId[r.id]?.player_count ?? 0 }))
   },
 
   /** Deletes a game and all of its files. Likes, comments and views go with it. */

@@ -32,7 +32,7 @@ function MyGames({ onChanged, toast }) {
             <div className="mygame" key={g.id}>
               <div>
                 <b>{g.title}{g.status !== 'published' && <span className="pill">{g.status}</span>}</b>
-                <small>{g.views} views · {g.likes} likes · {g.comments} comments</small>
+                <small>{g.views} views · {g.players} played · {g.likes} likes · {g.comments} comments</small>
               </div>
               {g.builtin ? null : confirming === g.id ? (
                 <>

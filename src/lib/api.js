@@ -6,6 +6,9 @@ import { demoApi } from './demoApi.js'
 
 export const api = isConfigured ? supabaseApi : demoApi
 
+// Guests (anonymous accounts) can watch and play; members can also like, comment, follow and upload.
+export const isMember = (user) => !!user && !user.is_anonymous
+
 // A game keeps its "Fresh creator boost" until it reaches this many views.
 export const BOOST_VIEWS = 100
 
