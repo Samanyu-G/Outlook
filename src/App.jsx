@@ -8,6 +8,7 @@ import ReportSheet from './components/ReportSheet.jsx'
 import LegalSheet from './components/LegalSheet.jsx'
 import Sheet from './components/Sheet.jsx'
 import Icon from './components/Icon.jsx'
+import { BrandIcon, BrandLockup } from './components/Logo.jsx'
 import { CheerSlot, HubMenu, StampPicker } from './components/CheerSlot.jsx'
 import { Dock, DockSlot, HubButton, PlayButton } from './components/ui.jsx'
 import { GameDetails, MakerProfile } from './screens/People.jsx'
@@ -530,6 +531,7 @@ export default function App() {
       default:
         return (
           <main className="discover" aria-label="Discover">
+            <BrandIcon size={28} className="top-mark" />
             <nav className="tuner" aria-label="Channel">
               {CHANNELS.map(([key, label]) => (
                 <button key={key} type="button" aria-pressed={tab === key} onClick={() => setTab(key)}>
@@ -552,7 +554,7 @@ export default function App() {
   return (
     <>
       <aside className="desk-note">
-        <h1>Nativity<span>.</span></h1>
+        <h1><BrandLockup height={88} tone="light" /></h1>
         <p>Swipe sideways through a deck of tiny games, then tap PLAY. Every new creator gets their first {BOOST_VIEWS} views guaranteed.</p>
         <p><b>Built for phones.</b> Open this on your phone, or drag, scroll or use the arrow keys inside the frame.</p>
         {api.mode === 'demo' && <p className="demo-pill">Demo mode · data stays in this browser</p>}

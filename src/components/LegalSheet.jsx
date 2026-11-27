@@ -1,5 +1,6 @@
 import { PRIVACY, TERMS } from '../content/legal.js'
 import Sheet from './Sheet.jsx'
+import { BrandIcon } from './Logo.jsx'
 
 // Shows the Terms of Service or the Privacy Policy, with a contents list for quick jumping.
 // It opens on top of everything, including the full-screen 18+ and sign-in screens.
@@ -9,6 +10,7 @@ export default function LegalSheet({ doc, onClose }) {
   return (
     <Sheet title={d.title} onClose={onClose} top>
       <article className="legal-doc" aria-label={d.title}>
+        <BrandIcon size={36} className="legal-brand" />
         <p className="legal-meta">Version {d.version} · Effective {d.effective}</p>
         <nav className="legal-toc" aria-label="Contents">
           {d.sections.map(([h]) => <a key={h} href={`#${id(h)}`}>{h}</a>)}

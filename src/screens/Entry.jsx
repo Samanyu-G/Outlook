@@ -4,6 +4,7 @@ import { api } from '../lib/api.js'
 import { STAMPS } from '../lib/activity.js'
 import { MIN_AGE } from '../content/legal.js'
 import Icon from '../components/Icon.jsx'
+import { BrandLockup } from '../components/Logo.jsx'
 import { CloseButton, Dock, PlayButton, Stamp } from '../components/ui.jsx'
 
 
@@ -34,6 +35,7 @@ export function PressStart({ reason, onClose, onOpenDoc }) {
       <main className="screen entry">
         <div className="entry-close"><CloseButton onClick={onClose} /></div>
         <div className="shapes" aria-hidden="true"><i className="s1" /><i className="s2" /><i className="s3" /><i className="s4" /></div>
+        <div className="brand-row"><BrandLockup height={44} /></div>
         <h1 className="h-display center">Press start</h1>
         <p className="lede center">{reason || 'Cheer, talk and join crews.'} Browsing and playing never need an account. Nativity is currently available only to adults ({MIN_AGE}+) who live in India: new accounts confirm their date of birth and residency after signing in.</p>
         {sentTo ? (
@@ -127,6 +129,7 @@ export function Onboarding({ onDone }) {
   return (
     <div className="overlay screen-overlay" role="dialog" aria-modal="true" aria-label="Welcome to Nativity">
       <main className="screen entry onboarding">
+        <div className="brand-row"><BrandLockup height={32} /></div>
         <div className="ob-dots" aria-hidden="true">{slides.map((_, k) => <i key={k} className={k === i ? 'on' : ''} />)}</div>
         <div className="ob-card">{s.art}</div>
         <h1 className="h-1 center">{s.title}</h1>

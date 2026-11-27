@@ -5,6 +5,7 @@ import { isToday, playerLevel, STAMPS, topStamp } from '../lib/activity.js'
 import { formatDob } from '../lib/age.js'
 import { GRIEVANCE_OFFICER, PRIVACY_VERSION, TERMS_VERSION } from '../content/legal.js'
 import Icon from '../components/Icon.jsx'
+import { BrandLockup } from '../components/Logo.jsx'
 import Sheet from '../components/Sheet.jsx'
 import { Avatar, Badge, Stamp, Toggle } from '../components/ui.jsx'
 import { Spine, Tabs } from './People.jsx'
@@ -244,6 +245,7 @@ export function Options({ prefs, setPref, profile, account, blockedCount, member
         <button type="button" className="orow" onClick={() => onDoc('terms')}><span>Terms of Service</span><Icon name="chevron" size={18} /></button>
         <a className="orow" href={`mailto:${GRIEVANCE_OFFICER.email}?subject=Nativity%20grievance`}><span>Grievance Officer</span><em>{GRIEVANCE_OFFICER.name}</em><Icon name="mail" size={18} /></a>
       </div>
+      <footer className="brand-foot"><BrandLockup height={40} /></footer>
       <p className="muted small center">Nativity is for adults 18+ who live in India. Terms {TERMS_VERSION} · Privacy {PRIVACY_VERSION}</p>
     </main>
   )

@@ -6,6 +6,7 @@ import { api } from '../lib/api.js'
 import { ageFrom, formatDob, MIN_AGE, todayIST, validDob } from '../lib/age.js'
 import { CONTACT_EMAIL, GRIEVANCE_OFFICER, NOT_IN_INDIA_MESSAGE, PRIVACY_VERSION, RULES, TERMS_VERSION } from '../content/legal.js'
 import Icon from '../components/Icon.jsx'
+import { BrandLockup } from '../components/Logo.jsx'
 import Sheet from '../components/Sheet.jsx'
 
 export const ADULT_KEY = 'nativity:adult-declared'
@@ -30,6 +31,7 @@ export function AgeDeclaration({ onAdult, onUnder, onOutside, onOpenDoc }) {
   return (
     <div className="overlay screen-overlay" role="dialog" aria-modal="true" aria-label="Adults in India only">
       <main className="screen entry age-gate">
+        <div className="brand-row gate-brand"><BrandLockup height={36} /></div>
         <div className="age-badge" aria-hidden="true"><b>18+</b></div>
         <h1 className="h-display center">Adults in India</h1>
         <p className="lede center">Nativity is currently available only to people aged {MIN_AGE} and over who live in India. Please confirm both to continue.</p>
@@ -49,6 +51,7 @@ export function NotForYou({ reason = 'age', onBack }) {
   return (
     <div className="overlay screen-overlay" role="dialog" aria-modal="true" aria-label={country ? 'Only available in India' : 'Nativity is for adults'}>
       <main className="screen entry age-gate">
+        <div className="brand-row gate-brand"><BrandLockup height={36} /></div>
         <div className="age-badge no" aria-hidden="true"><b>{country ? 'IN' : '18+'}</b></div>
         <h1 className="h-1 center">{country ? 'Only available in India' : 'Nativity is for adults'}</h1>
         <p className="lede center">{country ? NOT_IN_INDIA_MESSAGE : `Sorry, you need to be ${MIN_AGE} or older to use Nativity.`} Nothing about you was sent to us.</p>
@@ -95,6 +98,7 @@ export function AccountGate({ state, onDone, onIneligible, onResidency, onSignOu
   return (
     <div className="overlay screen-overlay" role="dialog" aria-modal="true" aria-label="Finish setting up your account">
       <main className="screen entry">
+        <div className="brand-row start gate-brand"><BrandLockup height={36} /></div>
         <h1 className="h-1">{needsDob || needsResidency ? 'One last step' : 'We’ve updated our terms'}</h1>
         <p className="lede">
           {needsDob || needsResidency
@@ -167,6 +171,7 @@ export function IneligibleAccount({ state, onCorrection, onDelete, onSignOut }) 
   return (
     <div className="overlay screen-overlay" role="dialog" aria-modal="true" aria-label="This account can’t be used">
       <main className="screen entry age-gate">
+        <div className="brand-row gate-brand"><BrandLockup height={36} /></div>
         <div className="age-badge no" aria-hidden="true"><b>18+</b></div>
         <h1 className="h-1 center">Nativity is for adults</h1>
         <p className="lede center">
@@ -219,6 +224,7 @@ export function ResidencyPending({ state, onCheckAgain, onRequest, onDelete, onS
   return (
     <div className="overlay screen-overlay" role="dialog" aria-modal="true" aria-label="We need to confirm you live in India">
       <main className="screen entry age-gate">
+        <div className="brand-row gate-brand"><BrandLockup height={36} /></div>
         <div className="age-badge no" aria-hidden="true"><b>IN</b></div>
         <h1 className="h-1 center">Almost there</h1>
         <p className="lede center">You told us you live in India, but your connection appears to be in {countryName(state?.residencySignal)}. That happens when you’re travelling, using a VPN, or when location data is wrong. It doesn’t prove anything either way.</p>
@@ -245,6 +251,7 @@ export function NotResidentAccount({ onRequest, onDelete, onSignOut }) {
   return (
     <div className="overlay screen-overlay" role="dialog" aria-modal="true" aria-label="Only available in India">
       <main className="screen entry age-gate">
+        <div className="brand-row gate-brand"><BrandLockup height={36} /></div>
         <div className="age-badge no" aria-hidden="true"><b>IN</b></div>
         <h1 className="h-1 center">Only available in India</h1>
         <p className="lede center">{NOT_IN_INDIA_MESSAGE}</p>

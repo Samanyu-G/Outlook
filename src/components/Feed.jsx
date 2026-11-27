@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BOOST_VIEWS } from '../lib/api.js'
 import Icon from './Icon.jsx'
+import { BrandIcon } from './Logo.jsx'
 import { Avatar, Badge, CheerMeter, LiveTrailer } from './ui.jsx'
 
 // One game as a "cartridge card" (Figma: Cartridge Card): trailer window on top, info panel below.
@@ -135,10 +136,10 @@ export default function Feed({ games, loading, error, tab, paused, autoplay = tr
   }
 
   let body
-  if (loading && !games.length) body = <div className="empty"><p>Loading games…</p></div>
-  else if (error) body = <div className="empty"><h3>Couldn’t load the feed</h3><p>{error}</p><button type="button" onClick={onRetry}>Try again</button></div>
-  else if (!games.length && tab === 'following') body = <div className="empty"><h3>Your crew is empty</h3><p>Join a maker’s crew from any game and their new games will show up here first.</p><button type="button" onClick={onFindFresh}>Find fresh creators</button></div>
-  else if (!games.length) body = <div className="empty"><h3>No games yet</h3><p>Be the first to upload one.</p></div>
+  if (loading && !games.length) body = <div className="empty" role="status"><BrandIcon size={64} className="brand-pulse" decorative /><p>Loading games…</p></div>
+  else if (error) body = <div className="empty"><BrandIcon size={48} decorative /><h3>Couldn’t load the feed</h3><p>{error}</p><button type="button" onClick={onRetry}>Try again</button></div>
+  else if (!games.length && tab === 'following') body = <div className="empty"><BrandIcon size={48} decorative /><h3>Your crew is empty</h3><p>Join a maker’s crew from any game and their new games will show up here first.</p><button type="button" onClick={onFindFresh}>Find fresh creators</button></div>
+  else if (!games.length) body = <div className="empty"><BrandIcon size={48} decorative /><h3>No games yet</h3><p>Be the first to upload one.</p></div>
   else body = games.map((g, i) => (
     <section key={g.id} className="card" data-id={g.id} aria-label={`${g.title} by @${g.creator.handle}`}>
       <GameCard

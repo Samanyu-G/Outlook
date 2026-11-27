@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<title>Nativity</title>
+<rect width="512" height="512" rx="112" fill="#3E2A21"/>
+<path d="M150 404 Q256 346 362 404 Z" fill="#74BE8F" stroke="#74BE8F" stroke-width="24" stroke-linejoin="round"/>
+<path d="M256 382 C256 330 220 302 226 244" fill="none" stroke="#74BE8F" stroke-width="30" stroke-linecap="round"/>
+<g transform="translate(222 226) rotate(-12)"><path d="M10 -62 L10 62 L118 0 Z" fill="#FB946D" stroke="#FB946D" stroke-width="38" stroke-linejoin="round"/></g>
+</svg>
