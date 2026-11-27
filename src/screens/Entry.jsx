@@ -35,7 +35,7 @@ export function PressStart({ reason, onClose, onOpenDoc }) {
         <div className="entry-close"><CloseButton onClick={onClose} /></div>
         <div className="shapes" aria-hidden="true"><i className="s1" /><i className="s2" /><i className="s3" /><i className="s4" /></div>
         <h1 className="h-display center">Press start</h1>
-        <p className="lede center">{reason || 'Cheer, talk and join crews.'} Browsing and playing never need an account. Nativity is for adults {MIN_AGE}+: new accounts confirm their date of birth after signing in.</p>
+        <p className="lede center">{reason || 'Cheer, talk and join crews.'} Browsing and playing never need an account. Nativity is currently available only to adults ({MIN_AGE}+) who live in India: new accounts confirm their date of birth and residency after signing in.</p>
         {sentTo ? (
           <div className="note"><b>Check your email.</b> We sent a start link to {sentTo}. Open it on this phone and you’ll come straight back here, signed in.</div>
         ) : (
@@ -45,7 +45,7 @@ export function PressStart({ reason, onClose, onOpenDoc }) {
             </label>
             <label className="agree">
               <input id="agree-terms" type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-              <span>I’m {MIN_AGE} or older and I agree to the{' '}
+              <span>I’m {MIN_AGE} or older, I live in India, and I agree to the{' '}
                 <button type="button" className="link" onClick={(e) => { e.preventDefault(); onOpenDoc('terms') }}>Terms</button>{' '}and{' '}
                 <button type="button" className="link" onClick={(e) => { e.preventDefault(); onOpenDoc('privacy') }}>Privacy Policy</button>.
               </span>

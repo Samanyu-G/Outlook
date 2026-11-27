@@ -1,4 +1,4 @@
--- Tests for 0008_adults_only.sql. Run AFTER the migration, in Supabase SQL Editor.
+-- Tests for 0008_adults_only.sql. Run AFTER the migrations (0008 and 0009), in Supabase SQL Editor.
 --
 -- Everything runs inside ONE block that ends by raising an error on purpose.
 -- That error rolls the whole thing back, so the test accounts and their actions
@@ -31,6 +31,10 @@ begin
     ('bbbbbbbb-0000-4000-a000-000000000001', game, unconf, 'old note from an unconfirmed account');
   insert into public.games (id, creator_id, title, builtin_key, status) values
     ('cccccccc-0000-4000-a000-000000000001', unconf, 'Unconfirmed game', 'kite', 'published');
+  -- These tests are about age, so the adult and the minor are already confirmed Indian
+  -- residents (0009). Residency itself is tested in 0009_india_only_test.sql.
+  insert into public.account_residency (user_id, status, declared_india, signal_country, method)
+  values (adult, 'resident', true, 'IN', 'declared_signal_match'), (minor, 'resident', true, 'IN', 'declared_signal_match');
 
   -- 1-2. Guest
   perform set_config('request.jwt.claims', json_build_object('sub', guest, 'role', 'authenticated', 'is_anonymous', true)::text, true);
@@ -91,11 +95,11 @@ begin
   begin insert into public.likes (user_id, game_id) values (adult, game); ok := false; msg := 'insert succeeded';
   exception when others then ok := true; msg := sqlerrm; end;
   lines := lines || format('%s  adult blocked until policies accepted  (%s)', case when ok then 'PASS' else 'FAIL' end, msg);
-  perform public.accept_policies('v2', 'v2');
+  perform public.accept_policies((select version from public.policy_versions where doc = 'terms'), (select version from public.policy_versions where doc = 'privacy'));
   begin insert into public.likes (user_id, game_id) values (adult, game); ok := true; msg := 'cheered';
   exception when others then ok := false; msg := sqlerrm; end;
   lines := lines || format('%s  adult with consent can cheer  (%s)', case when ok then 'PASS' else 'FAIL' end, msg);
-  select count(*) into n from public.policy_acceptances where user_id = adult and version = 'v2' and accepted_at is not null;
+  select count(*) into n from public.policy_acceptances where user_id = adult and version = (select version from public.policy_versions where doc = 'terms') and accepted_at is not null;
   lines := lines || format('%s  consent recorded with version and time  (%s rows)', case when n = 2 then 'PASS' else 'FAIL' end, n);
   select count(*) into n from public.account_age where user_id <> adult;
   lines := lines || format('%s  cannot read other people''s age records  (%s rows)', case when n = 0 then 'PASS' else 'FAIL' end, n);
@@ -107,7 +111,7 @@ begin
   -- 20-25. One day short of 18
   perform set_config('request.jwt.claims', json_build_object('sub', minor, 'role', 'authenticated', 'is_anonymous', false)::text, true);
   set local role authenticated;
-  perform public.accept_policies('v2', 'v2');
+  perform public.accept_policies((select version from public.policy_versions where doc = 'terms'), (select version from public.policy_versions where doc = 'privacy'));
   r := public.confirm_birth_date((today - interval '18 years')::date + 1);
   lines := lines || format('%s  one day before 18th birthday is ineligible  (%s)', case when r = 'ineligible' then 'PASS' else 'FAIL' end, r);
   select count(*) into n from public.account_age where user_id = minor and birth_date is null and status = 'ineligible';

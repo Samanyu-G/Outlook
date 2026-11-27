@@ -220,6 +220,7 @@ export function Options({ prefs, setPref, profile, account, blockedCount, member
           <>
             <button type="button" className="orow" onClick={onEditProfile}><span>Handle &amp; bio</span><em>@{profile?.handle}</em><Icon name="chevron" size={18} /></button>
             {account && <button type="button" className="orow" onClick={onDob}><span>Date of birth</span><em>{dobLabel}</em><Icon name="chevron" size={18} /></button>}
+            {account && <div className="orow"><span>Country of residence</span><em>{account.residencyStatus === 'resident' || account.residencyStatus === 'operator' ? 'India (confirmed)' : account.residencyStatus === 'review' ? 'India (in review)' : account.residencyStatus === 'not_resident' ? 'Outside India' : 'Not confirmed'}</em></div>}
             <button type="button" className="orow" onClick={onSignOut}><span>Sign out</span><Icon name="chevron" size={18} /></button>
           </>
         ) : (
@@ -243,7 +244,7 @@ export function Options({ prefs, setPref, profile, account, blockedCount, member
         <button type="button" className="orow" onClick={() => onDoc('terms')}><span>Terms of Service</span><Icon name="chevron" size={18} /></button>
         <a className="orow" href={`mailto:${GRIEVANCE_OFFICER.email}?subject=Nativity%20grievance`}><span>Grievance Officer</span><em>{GRIEVANCE_OFFICER.name}</em><Icon name="mail" size={18} /></a>
       </div>
-      <p className="muted small center">Nativity is for adults 18+. Terms {TERMS_VERSION} · Privacy {PRIVACY_VERSION}</p>
+      <p className="muted small center">Nativity is for adults 18+ who live in India. Terms {TERMS_VERSION} · Privacy {PRIVACY_VERSION}</p>
     </main>
   )
 }

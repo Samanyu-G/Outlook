@@ -1,6 +1,6 @@
-# Nativity: 18+ and Indian legal compliance
+# Nativity: 18+, India-only and Indian legal compliance
 
-Prepared 27 November 2026. This report explains how Nativity was made strictly 18+, and how its documents and data handling were aligned with the Indian laws that apply to it.
+Prepared 27 November 2026. Updated 28 November 2026 for India-only residency (section 9). This report explains how Nativity was made strictly 18+, and how its documents and data handling were aligned with the Indian laws that apply to it.
 
 **This is not legal advice.** Items marked **Requires legal review** should be checked by an Indian lawyer before relying on them.
 
@@ -247,3 +247,102 @@ Status key: ✅ Compliant · 🟡 Partially compliant · ⛔ Not implemented · 
 - [IT Rules 2021, rule 3(1) text](https://indiankanoon.org/doc/45988656/) · [MeitY FAQ on IT Rules](https://taxguru.in/corporate-law/faqs-address-queries-it-rules-2021-part-ii.html)
 - [CERT-In Directions 2022](https://www.internetsociety.org/resources/doc/2022/internet-impact-brief-india-cert-in-cybersecurity-directions-2022/)
 - [Online Gaming Rules 2026](https://www.medianama.com/2026/04/223-online-gaming-rules-notified-may-1-major-changes/) · [Lexology summary](https://www.lexology.com/library/detail.aspx?g=822e9f46-659b-4c32-aa76-6045645a9351)
+
+
+---
+
+## 9. India-only: residency (added 28 Nov 2026)
+
+Nativity now requires **both** conditions before an account can post:
+
+1. **18+**, as before.
+2. **Resident of India.** Residency means where someone ordinarily lives, **not nationality**.
+
+### How residency is established
+
+The approach is proportionate: no documents and no precise location.
+
+**Visitors**
+- The first screen offers three buttons: *I'm 18+ and I live in India*, *I'm under 18*, *I live outside India*.
+- No guest ID is created unless the visitor confirms both conditions.
+- "Outside India" shows: *"This platform is currently available exclusively to eligible residents of India. Registration is not available to users residing outside India."* It also gives the Grievance Officer's contact for anyone who has been classified wrongly.
+
+**Accounts (any sign-in method)**
+- The "One last step" screen asks for a **country of residence**, and India is the only option.
+- The person ticks *"I live in India"*. A link offers *"I live outside India"*.
+- The server function `confirm_residency()` then reads **Cloudflare's `cf-ipcountry` header**:
+  - Cloudflare sets this header itself.
+  - We tested that a client can't override it: sending `cf-ipcountry: US` still produced `IN`.
+  - Only the **two-letter country code** is stored, never the IP address.
+- **Outcomes**
+
+  | Declared | Connection country | Result |
+  |---|---|---|
+  | India | IN | **resident** |
+  | India | other / unknown / Tor | **review** — they can "Check again" (from India, or without a VPN), or a moderator reviews a note they write |
+  | Outside India | any | **not_resident** — blocked, activity removed; they can ask for a review |
+- **Once someone is a resident, later travel doesn't matter.** Residency isn't re-checked on every request.
+- **Ref desk has a residency review queue.** It shows the note and the connection country. A moderator can't review their own request, and the queue explains that a foreign IP alone is not a reason to reject.
+- **Phone sign-in** isn't enabled. If it is enabled later, a database trigger only accepts Indian **+91** mobile numbers (`91[6-9]XXXXXXXXX`).
+
+### Enforcement
+
+`can_participate()` now also requires `is_resident()`, so every restrictive write policy from `0008` applies to residency too.
+
+`is_eligible_author()` now requires both age and residency. Content from accounts that are not confirmed adult residents is hidden from others.
+
+**Existing accounts**
+- Real accounts have no residency record, so they must confirm before posting.
+- The five seed personas are marked `operator`.
+- Policy versions moved to **v3**, so everyone re-accepts.
+
+**Retention**
+- `not_resident` accounts without uploads are deleted 30 days after the outcome, unless a review is pending.
+- The 180-day registration record now includes the residency result.
+
+### Database: `supabase/migrations/0009_india_only.sql`
+
+- **Tables:** `account_residency` and `residency_reviews` (owner can read; written only by functions).
+- **Functions:** `request_country()`, `confirm_residency()`, `request_residency_review()`, `list_residency_reviews()`, `review_residency()` and `is_resident()`.
+- **Updated:** `can_participate()`, `is_eligible_author()`, `my_account_state()`, `compliance.archive_account()` and `compliance.run_retention()`.
+- **Trigger:** `india_phone_only` on `auth.users`.
+
+### Test results (live Supabase, 28 Nov 2026)
+
+`supabase/tests/0009_india_only_test.sql`: **29 passed, 0 failed**, all rolled back.
+
+| # | Scenario | Result |
+|---|---|---|
+| 1 | Indian resident registering from India | ✅ approved; can post; still can post later from abroad |
+| 2 | Indian resident travelling outside India | ✅ goes to review (not rejected); can't post while waiting; "check again" from India approves it and closes the review |
+| 3 | Non-Indian resident registering from India | ✅ refused although the IP is Indian; can't post; can't simply change the answer |
+| 4 | Non-Indian resident registering from abroad | ✅ refused; only the country code is stored; can ask for review, which approves nothing by itself |
+| 5 | VPN / unknown location / Tor | ✅ goes to review; only one pending review per person |
+| 6 | API manipulation | ✅ can't write a residency record; can't post or upload without residency; can't see or approve reviews; spoofed `cf-ipcountry` header ignored; non-+91 phone refused, +91 accepted |
+| 7 | Existing account with no residency | ✅ can't post until confirmed; old notes hidden from others |
+| — | Privacy and moderation | ✅ can't read others' residency; a moderator sees the queue and approval makes the person a resident |
+
+`supabase/tests/0008_adults_only_test.sql` was updated for v3 terms and residency, and re-run: **29 passed, 0 failed**.
+
+**App flows (demo mode, country simulated):**
+- "I live outside India" shows the exact required message.
+- The traveller (UAE) gets the review screen. "Check again" still abroad gives a clear message; "Check again" from India approves, and Options shows "India (confirmed)".
+- "I live outside India" at sign-up blocks the account. "Ask for a review" sends a note to the moderator queue. Approving it works.
+
+### Checklist additions
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Registration limited to residents of India | ✅ | Declaration plus server-side signal and review. Enforced in RLS for every write. |
+| IP geolocation used as a signal only | ✅ | Documented in the Terms and Privacy Policy. An Indian IP alone never approves someone: they must also declare residency. |
+| Travellers, VPNs and bad geo-IP not wrongly rejected | ✅ | Review path plus "check again". Existing residents are never re-checked. |
+| No Aadhaar, ID documents or precise location | ✅ | Only a 2-letter country code and an optional free-text note (users are told not to include ID numbers). |
+| Same rules for every sign-in method | ✅ | The check runs after sign-in, inside the database. The phone trigger covers phone sign-in if it is enabled. |
+| Terms and Privacy Policy updated (v3) | ✅ ⚖️ | Residency defined as "ordinarily lives in India". Lawyer review recommended. |
+| Proving legal residency | ⚖️ | By design this is *not* proven: self-declaration plus a signal. A person in India who falsely declares residency cannot be detected without documents. That is a deliberate proportionality trade-off. |
+
+### Remaining risks (residency)
+
+1. **Someone who lies about residency while on an Indian connection** (or an Indian VPN exit) is approved. Only a breach of the Terms deters this.
+2. **The `cf-ipcountry` header comes from Supabase's Cloudflare edge.** If Supabase changes its infrastructure, `request_country()` returns `NULL`, and everyone goes to review rather than being wrongly approved. That fails safe, but would add moderator work.
+3. **Reviews need a moderator.** Pending reviews block posting, but not browsing or playing.

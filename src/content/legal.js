@@ -16,9 +16,12 @@ export const SITE = 'nativity-sable.vercel.app'
 
 export const MIN_AGE = 18
 // Must match public.policy_versions in the database.
-export const TERMS_VERSION = 'v2'
-export const PRIVACY_VERSION = 'v2'
-export const EFFECTIVE = '27 November 2026'
+export const TERMS_VERSION = 'v3'
+export const PRIVACY_VERSION = 'v3'
+export const EFFECTIVE = '28 November 2026'
+
+// Shown wherever someone outside India tries to use or register for Nativity.
+export const NOT_IN_INDIA_MESSAGE = 'This platform is currently available exclusively to eligible residents of India. Registration is not available to users residing outside India.'
 
 // Report reasons (keys match the database). "intimate" and "minor" are urgent tracks.
 export const REASONS = [
@@ -55,13 +58,15 @@ export const TERMS = {
       `Nativity (${SITE}) is a place to discover and play small browser games made by independent creators. It is run by ${OPERATOR}, an individual based in India (“we”, “us”).`,
       'These Terms, together with our Privacy Policy and Community Rules, are the agreement between you and us. They are also our rules and regulations, privacy policy and user agreement under rule 3(1)(a) of the Information Technology (Intermediary Guidelines and Digital Media Ethics Code) Rules, 2021 (“IT Rules”). By using Nativity you agree to them. If you do not agree, do not use Nativity.',
     ]],
-    ['2. Adults only (18+)', [
-      `Nativity is only for adults aged ${MIN_AGE} or older. You must not use Nativity, or create an account, if you are under ${MIN_AGE}.`,
+    ['2. Who can use Nativity: adults (18+) who live in India', [
+      `Nativity is currently available only to people who are BOTH ${MIN_AGE} or older AND residents of India (people who ordinarily live in India). It depends on where you live, not on your nationality: Indian citizens who live abroad are not eligible, and people of any nationality who live in India are. You must not use Nativity, or create an account, unless you meet both conditions.`,
       { list: [
-        `Before you can browse, you must confirm that you are ${MIN_AGE} or older.`,
-        'When you create an account, you must enter your real date of birth. We work out your age on our servers using today’s date in India. If you are under 18, your account cannot post anything, and it is removed (see our Privacy Policy).',
-        'Your date of birth cannot be edited freely. If you entered it wrongly, request a correction in Options. A moderator reviews it, and may contact you by email before deciding.',
-        'Giving a false date of birth is a serious breach of these Terms. We will close accounts that we reasonably believe belong to someone under 18.',
+        `Before you can browse, you must confirm that you are ${MIN_AGE} or older and live in India.`,
+        'When you create an account, you must enter your real date of birth and confirm that you live in India. Your age is worked out on our servers using today’s date in India.',
+        'When you confirm residency, our servers also check which country your internet connection appears to be in. This is only a signal: it does not prove where you live, and an Indian connection does not make you a resident. If your connection appears to be outside India (for example while travelling, or using a VPN), your account waits for review: you can check again from India, or ask a moderator to review it. We do not ask for Aadhaar or other identity documents; a moderator may email you with questions.',
+        'Once your residency is confirmed, travelling abroad does not affect your account.',
+        'If you are under 18, or you tell us you live outside India, your account cannot post anything and is removed (see our Privacy Policy). Your date of birth cannot be edited freely: corrections are reviewed by a moderator.',
+        'Giving false information about your age or where you live is a serious breach of these Terms. We will close accounts that we reasonably believe are not eligible.',
       ] },
     ]],
     ['3. Your account', [
@@ -170,12 +175,12 @@ export const PRIVACY = {
       `Nativity (${SITE}) is run by ${OPERATOR}, an individual based in India (“we”, “us”). We decide why and how your personal data is processed, so we are the “Data Fiduciary” under India’s Digital Personal Data Protection Act, 2023 (“DPDP Act”).`,
       'This policy explains, item by item, what we collect, why, who can see it, how long we keep it, and your rights. You can ask us for this notice in English or in any language listed in the Eighth Schedule to the Constitution of India.',
     ]],
-    ['2. Nativity is for adults only', [
-      'We do not knowingly process personal data of anyone under 18.',
+    ['2. Who Nativity is for', [
+      'Nativity is currently available only to adults (18+) who live in India. We do not knowingly process personal data of anyone under 18, and we do not offer Nativity to people who live outside India.',
       { list: [
-        'Before you browse, you confirm you are 18 or older. If you say you are under 18, Nativity stops and does not create any ID for you.',
-        'When you create an account, you enter your date of birth. Our server checks it against today’s date in India.',
-        'If the check shows you are under 18: we do not store your date of birth (only the result), we remove your cheers, crews, stamps, views and plays, we hide your games and notes, and your account cannot post. If you did not upload any games, the account is deleted automatically 30 days later; otherwise a moderator removes it.',
+        'Before you browse, you confirm you are 18 or older and live in India. If you say you are under 18 or live outside India, Nativity stops and does not create any ID for you.',
+        'When you create an account, you enter your date of birth and confirm you live in India. Our server checks your age against today’s date in India.',
+        'If the check shows you are under 18, or you tell us you live outside India: we do not store your date of birth (only the result), we remove your cheers, crews, stamps, views and plays, we hide your games and notes, and your account cannot post. If you did not upload any games, the account is deleted automatically 30 days later (unless a residency review is pending); otherwise a moderator removes it.',
         'If you believe an account belongs to someone under 18, report it with the reason “This account seems to belong to someone under 18”.',
       ] },
     ]],
@@ -186,9 +191,11 @@ export const PRIVACY = {
         'Handle, name, bio and avatar colour: public. Your handle starts as a random “player…” name and your name starts as the part of your email before the “@”; you can change both.',
         'When your account was created, whether you are a moderator, and whether your account is suspended.',
       ] },
-      'Age and consent records',
+      'Age, residency and consent records',
       { list: [
         'Date of birth (adults only), whether you passed the check, how it was checked, and when. Only you can see this.',
+        'Whether you told us you live in India, the result of the residency check (confirmed, waiting for review, or outside India), how it was decided, when, and the two-letter country code (for example “IN”) that your internet connection appeared to be in at that moment. Only you can see this. Residency is about where you live, not your nationality.',
+        'Residency review requests: your note, the connection country at the time, and the moderator’s decision and note.',
         'Date-of-birth correction requests: the date you asked for, your reason, and the moderator’s decision and note.',
         'Which version of the Terms and this Privacy Policy you accepted, and when. When we last showed you the community rules.',
       ] },
@@ -207,9 +214,10 @@ export const PRIVACY = {
       { list: [
         'If you browse without an account, we create a random guest ID after you confirm you are 18+. Your views and plays are linked to that ID, not to your name or email. Guest IDs and their history are deleted after 90 days.',
       ] },
-      'Technical data',
+      'Technical data and approximate country',
       { list: [
         'Our providers automatically process your IP address, browser type and request times when you use Nativity, to deliver the site and protect it from abuse (see section 6). We do not use analytics, advertising or tracking tools.',
+        'IP-based country check: when you confirm residency (and if you ask us to check again), our server reads the country that Cloudflare, the network in front of our database, estimates from your IP address. We keep only the two-letter country code, never your IP address, city or precise location. It is a signal, not proof: it can be wrong, and VPNs change it.',
       ] },
       'On your device (not sent to us)',
       { list: [
@@ -217,7 +225,7 @@ export const PRIVACY = {
       ] },
       'What we do not collect',
       { list: [
-        'Passwords (you sign in with an email link), ID documents, payment details, contacts or location.',
+        'Passwords (you sign in with an email link), Aadhaar numbers or other identity documents, payment details, contacts, or precise location (GPS, city or address).',
         'Camera: only if you choose “Record” when making a trailer. Your browser opens your camera; the video stays on your device unless you publish it.',
       ] },
     ]],
@@ -225,7 +233,7 @@ export const PRIVACY = {
       'We process personal data on the basis of the consent you give when you create an account, and, where the law requires it, to comply with legal obligations (section 7 of the DPDP Act). We use it only to:',
       { list: [
         'create and run your account and sign you in;',
-        'check that you are an adult, and record your agreement to these documents;',
+        'check that you are an adult and that you live in India (Nativity is only offered to adult residents of India), and record your agreement to these documents;',
         'show games, notes, cheers and crews, and count views and players fairly;',
         'show creators totals about how their games are doing;',
         'run your Mailbox (stamps, crews and notes about you and your games);',
@@ -238,14 +246,14 @@ export const PRIVACY = {
       { list: [
         'Everyone using Nativity: your handle, name, bio, avatar colour, games, trailers, notes, cheers, crews, and stamp totals on games.',
         'A game’s creator: which stamps you gave their game.',
-        'Only you: your email, date of birth, age-check result, consent records, correction requests, stamps you gave, views, plays, scores, reports and blocks.',
-        'Moderators (currently only the operator): reports and the content reported; date-of-birth correction requests, with the date currently on record, when reviewing them.',
+        'Only you: your email, date of birth, age-check and residency results, consent records, correction and review requests, stamps you gave, views, plays, scores, reports and blocks.',
+        'Moderators (currently only the operator): reports and the content reported; date-of-birth correction requests (with the date on record) and residency review requests (with your note and connection country), when reviewing them.',
       ] },
       'These rules are enforced by the database itself, not only by the app.',
     ]],
     ['6. Service providers and where data is stored', [
       { list: [
-        'Supabase Inc.: database, sign-in emails and file storage. Our database and files are stored in Mumbai, India (region ap-south-1).',
+        'Supabase Inc.: database, sign-in emails and file storage. Our database and files are stored in Mumbai, India (region ap-south-1). Requests to the database pass through Cloudflare, which estimates the country of each connection (see section 3).',
         'Vercel Inc.: hosts and delivers the website through servers around the world. It processes IP addresses and request logs, which may be handled outside India, including in the United States.',
         'Google LLC: Nativity loads its fonts from Google Fonts, so your browser sends your IP address and browser details to Google when the page loads.',
         'Game creators: games are third-party code. They run in a sandbox and cannot see your account, but a game can load images, sounds or code from other websites, which then receive your IP address.',
@@ -258,10 +266,10 @@ export const PRIVACY = {
     ['8. How long we keep it', [
       { list: [
         'Your account data, content and activity: until you delete them or your account.',
-        'After you delete your account: everything is deleted straight away, except a minimal registration record (your email, handle, when the account was created, and your age-check result), kept for 180 days because the IT Rules require it, and then deleted.',
+        'After you delete your account: everything is deleted straight away, except a minimal registration record (your email, handle, when the account was created, and your age-check and residency results), kept for 180 days because the IT Rules require it, and then deleted.',
         'Content that was hidden after a report, and the reports about it: kept for 180 days after you delete your account, because the IT Rules require it. Uploaded files are not kept.',
         'Guest IDs and their history: 90 days.',
-        'Under-18 accounts: see section 2.',
+        'Under-18 accounts and accounts of people who live outside India: see section 2.',
         'Logs kept by Supabase and Vercel: for the periods those providers set.',
         'Data on your device: until you clear it in your browser.',
       ] },
@@ -270,7 +278,7 @@ export const PRIVACY = {
     ['9. Your rights and how to use them', [
       { list: [
         'Access: download a copy of your data at any time in Options → Download my data.',
-        'Correction: edit your handle, name and bio in Options. To correct your date of birth, request a correction in Options.',
+        'Correction: edit your handle, name and bio in Options. To correct your date of birth or your residency, request a review in Options or on the screen that shows the result.',
         'Erasure: delete your account in Options. It happens immediately, apart from the records in section 8.',
         'Withdraw consent: you can withdraw consent at any time by deleting your account. Withdrawing does not affect anything lawfully done before.',
         'Nominate: you can nominate someone to exercise your rights if you die or become unable to; email us with their details.',
@@ -292,7 +300,7 @@ export const PRIVACY = {
 
 // The community rules shown at sign-up and in the quarterly reminder.
 export const RULES = [
-  'Nativity is for adults 18 and over.',
+  'Nativity is for adults (18+) who live in India.',
   'Only upload games you made or have the right to share.',
   'Nothing sexual, hateful, violent, illegal or harmful, and no real-money games.',
   'Criticise the game, never the person.',

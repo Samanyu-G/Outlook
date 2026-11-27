@@ -17,7 +17,7 @@ import Make from './screens/Make.jsx'
 import RefDesk from './screens/RefDesk.jsx'
 import { MOODS_KEY, ONBOARD_KEY, Onboarding, PressStart } from './screens/Entry.jsx'
 import { GRIEVANCE_TIMES, RULES } from './content/legal.js'
-import { AccountGate, ADULT_KEY, AgeDeclaration, DobSheet, IneligibleAccount, NotForYou, RulesReminder, UNDERAGE_KEY } from './screens/Age.jsx'
+import { AccountGate, ADULT_KEY, AgeDeclaration, DobSheet, IneligibleAccount, NotForYou, NotResidentAccount, OUTSIDE_KEY, ResidencyPending, RulesReminder, UNDERAGE_KEY } from './screens/Age.jsx'
 
 const CHANNELS = [['foryou', 'For you'], ['fresh', 'Fresh'], ['following', 'Crew']]
 const PREFS_KEY = 'nativity:prefs'
@@ -56,6 +56,8 @@ export default function App() {
   const [doc, setDoc] = useState(null)
   const [adultDeclared, setAdultDeclared] = useState(() => readFlag(ADULT_KEY))
   const [underage, setUnderage] = useState(() => readFlag(UNDERAGE_KEY))
+  const [outside, setOutside] = useState(() => readFlag(OUTSIDE_KEY))
+  const [residencyQueue, setResidencyQueue] = useState(null)
   const [account, setAccount] = useState(null)   // age + consent state of the signed-in member (null = not loaded / not a member)
   const [gateLater, setGateLater] = useState(false)
   const [reminder, setReminder] = useState(false)
@@ -323,12 +325,13 @@ export default function App() {
 
   /* ---------- adults only ---------- */
   async function declareAdult() {
-    writeFlag(ADULT_KEY, true); writeFlag(UNDERAGE_KEY, false)
-    setAdultDeclared(true); setUnderage(false)
+    writeFlag(ADULT_KEY, true); writeFlag(UNDERAGE_KEY, false); writeFlag(OUTSIDE_KEY, false)
+    setAdultDeclared(true); setUnderage(false); setOutside(false)
     const u = await api.startGuest().catch(() => null)
     if (u) setUser(u)
   }
   function declareUnder() { writeFlag(UNDERAGE_KEY, true); setUnderage(true) }
+  function declareOutside() { writeFlag(OUTSIDE_KEY, true); setOutside(true) }
 
   async function exportData() {
     setExporting(true)
@@ -343,16 +346,26 @@ export default function App() {
     } catch (e) { toast(e.message) } finally { setExporting(false) }
   }
 
-  const loadCorrections = useCallback(() => { api.listDobCorrections().then(setCorrections).catch(() => setCorrections([])) }, [])
+  const loadCorrections = useCallback(() => {
+    api.listDobCorrections().then(setCorrections).catch(() => setCorrections([]))
+    api.listResidencyReviews().then(setResidencyQueue).catch(() => setResidencyQueue([]))
+  }, [])
   useEffect(() => { if (route.name === 'refdesk' && isAdmin) loadCorrections() }, [route.name, isAdmin, loadCorrections])
+  async function reviewResidency(v, approve, note) {
+    setRefBusy(v.id)
+    try { await api.reviewResidency(v.id, approve, note); toast(approve ? `@${v.handle} confirmed as living in India` : `@${v.handle} recorded as outside India`); loadCorrections() } catch (e) { toast(e.message) } finally { setRefBusy(null) }
+  }
   async function reviewCorrection(c, approve, note) {
     setRefBusy(c.id)
     try { await api.reviewDobCorrection(c.id, approve, note); toast(approve ? `Correction approved for @${c.handle}` : `Correction rejected for @${c.handle}`); loadCorrections() } catch (e) { toast(e.message) } finally { setRefBusy(null) }
   }
 
-  const needsGate = !!(member && account && account.ageStatus !== 'ineligible' &&
-    (!account.ageStatus || account.accepted.terms !== account.current.terms || account.accepted.privacy !== account.current.privacy))
-  const dobOnlyMissing = needsGate && !account.ageStatus
+  // Both conditions: 18+ AND resident of India (plus the current Terms and Privacy Policy).
+  const residency = account?.residencyStatus
+  const blocked = account?.ageStatus === 'ineligible' ? 'age' : residency === 'not_resident' ? 'country' : residency === 'review' ? 'review' : null
+  const needsGate = !!(member && account && !blocked &&
+    (!account.ageStatus || !residency || account.accepted.terms !== account.current.terms || account.accepted.privacy !== account.current.privacy))
+  const dobOnlyMissing = needsGate && (!account.ageStatus || !residency)
 
   /* ---------- derived ---------- */
   const detailGame = route.name === 'details' ? catalog[route.id] : null
@@ -513,7 +526,7 @@ export default function App() {
         return <Make onExit={back} toast={toast}
           onPublished={() => { setTab('fresh'); setStack([{ name: 'discover' }]); setCatalog({}); catalogLoaded.current = false; loadFeed() }} />
       case 'refdesk':
-        return isAdmin ? <RefDesk items={reports} error={reportsError} busy={refBusy} onAct={refAct} corrections={corrections} onReviewCorrection={reviewCorrection} /> : null
+        return isAdmin ? <RefDesk items={reports} error={reportsError} busy={refBusy} onAct={refAct} corrections={corrections} onReviewCorrection={reviewCorrection} residencyReviews={residencyQueue} onReviewResidency={reviewResidency} /> : null
       default:
         return (
           <main className="discover" aria-label="Discover">
@@ -526,7 +539,7 @@ export default function App() {
             </nav>
             <Feed
               games={feedGames} loading={loading} error={error} tab={tab}
-              paused={!!playing || !!sheet || onboarding || !!auth || (!member && !adultDeclared) || needsGate || account?.ageStatus === 'ineligible'} autoplay={prefs.autoplay} dataSaver={dataSaver}
+              paused={!!playing || !!sheet || onboarding || !!auth || (!member && !adultDeclared) || needsGate || !!blocked} autoplay={prefs.autoplay} dataSaver={dataSaver}
               onActive={setActiveId} onPlay={play} onFollow={onFollow} onOpen={openGame} onMaker={openMaker}
               onView={(id) => api.recordView(id).catch(() => {})}
               onRetry={loadFeed} onFindFresh={() => setTab('fresh')}
@@ -613,16 +626,35 @@ export default function App() {
         {auth && <PressStart reason={auth.reason} onClose={() => setAuth(null)} onOpenDoc={setDoc} />}
         {onboarding && (adultDeclared || member) && <Onboarding onDone={(m) => { setOnboarding(false); if (m.length) setMoods(m) }} />}
         {/* Adults only: visitors confirm 18+ before any guest ID is created */}
-        {authReady && !member && !adultDeclared && !underage && <AgeDeclaration onAdult={declareAdult} onUnder={declareUnder} onOpenDoc={setDoc} />}
-        {authReady && !member && underage && <NotForYou onBack={() => { writeFlag(UNDERAGE_KEY, false); setUnderage(false) }} />}
+        {authReady && !member && !adultDeclared && !underage && !outside && <AgeDeclaration onAdult={declareAdult} onUnder={declareUnder} onOutside={declareOutside} onOpenDoc={setDoc} />}
+        {authReady && !member && (underage || outside) && (
+          <NotForYou reason={outside ? 'country' : 'age'} onBack={() => { writeFlag(UNDERAGE_KEY, false); writeFlag(OUTSIDE_KEY, false); setUnderage(false); setOutside(false) }} />
+        )}
         {/* Members: date of birth once, then the current Terms and Privacy Policy */}
         {needsGate && (dobOnlyMissing || !gateLater) && !sheet && (
           <AccountGate
             key={account.ageStatus || 'new'} state={account} onOpenDoc={setDoc}
             onDone={async () => { const st = await loadAccount(); setReminder(false); api.ackRulesNotice().catch(() => {}); if (st?.canParticipate) toast('Welcome to Nativity!'); refreshAll() }}
             onIneligible={() => { loadAccount(); refreshAll() }}
+            onResidency={() => { loadAccount(); refreshAll() }}
             onSignOut={async () => { await api.signOut(); setStack([{ name: 'discover' }]) }}
             onLater={() => setGateLater(true)}
+          />
+        )}
+        {member && blocked === 'review' && !sheet && (
+          <ResidencyPending
+            state={account}
+            onCheckAgain={async () => { const r = await api.confirmResidency(true); const st = await loadAccount(); if (r === 'resident') { toast('Thanks, you’re all set!'); refreshAll() } return r === 'resident' ? r : (st && r) }}
+            onRequest={async (note) => { await api.requestResidencyReview(note); loadAccount() }}
+            onDelete={() => setSheet({ type: 'delete' })}
+            onSignOut={async () => { await api.signOut(); setStack([{ name: 'discover' }]) }}
+          />
+        )}
+        {member && blocked === 'country' && !sheet && (
+          <NotResidentAccount
+            onRequest={async (note) => { await api.requestResidencyReview(note); loadAccount() }}
+            onDelete={() => setSheet({ type: 'delete' })}
+            onSignOut={async () => { await api.signOut(); setStack([{ name: 'discover' }]) }}
           />
         )}
         {member && account?.ageStatus === 'ineligible' && !sheet && (

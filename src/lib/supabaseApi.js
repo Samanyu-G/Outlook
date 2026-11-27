@@ -459,6 +459,8 @@ export const supabaseApi = {
     if (error) throw new Error(error.message)
     return {
       ageStatus: data.age_status, birthDate: data.birth_date,
+      residencyStatus: data.residency_status ?? null, residencySignal: data.residency_signal ?? null,
+      residencyReview: data.residency_review ?? null, connectionCountry: data.connection_country ?? null,
       accepted: data.accepted || {}, current: data.current || {},
       correction: data.correction, rulesNotifiedAt: data.rules_notified_at, canParticipate: data.can_participate,
     }
@@ -478,6 +480,25 @@ export const supabaseApi = {
   async reviewDobCorrection(id, approve, note) {
     must(await supabase.rpc('review_birth_date_correction', { p_id: id, p_approve: approve, p_note: note }))
   },
+  // Residency: the server reads the connection's country itself (Cloudflare header).
+  async confirmResidency(india, note = '') {
+    const { data, error } = await supabase.rpc('confirm_residency', { p_india: india, p_note: note })
+    if (error?.code === 'PGRST202') return 'resident' // 0009 not installed yet: nothing to enforce
+    if (error) throw new Error(error.message)
+    return data
+  },
+  async requestResidencyReview(note) {
+    must(await supabase.rpc('request_residency_review', { p_note: note }))
+  },
+  async listResidencyReviews() {
+    const { data, error } = await supabase.rpc('list_residency_reviews')
+    if (error?.code === 'PGRST202') return []
+    if (error) throw new Error(error.message)
+    return data
+  },
+  async reviewResidency(id, approve, note) {
+    must(await supabase.rpc('review_residency', { p_id: id, p_approve: approve, p_note: note }))
+  },
   async ackRulesNotice() {
     must(await supabase.rpc('ack_rules_notice'))
   },
@@ -486,9 +507,9 @@ export const supabaseApi = {
   async exportMyData() {
     const id = currentUser.id
     const own = (table, col = 'user_id', select = '*') => supabase.from(table).select(select).eq(col, id).then((r) => (r.error ? { error: r.error.message } : r.data))
-    const [profile, age, acceptances, corrections, games, comments, likes, crews, crewMembers, stamps, views, playStarts, rounds, reports, blocks] = await Promise.all([
+    const [profile, age, acceptances, corrections, residency, residencyReviews, games, comments, likes, crews, crewMembers, stamps, views, playStarts, rounds, reports, blocks] = await Promise.all([
       supabase.from('profiles').select('handle, display_name, bio, avatar_color, created_at, role, banned, terms_accepted_at, rules_notified_at').eq('id', id).maybeSingle().then((r) => r.data),
-      own('account_age'), own('policy_acceptances'), own('dob_corrections'),
+      own('account_age'), own('policy_acceptances'), own('dob_corrections'), own('account_residency'), own('residency_reviews'),
       own('games', 'creator_id', 'id, title, description, tags, status, touch_friendly, bundle_path, trailer_path, created_at'),
       own('comments'), own('likes'), own('follows', 'follower_id'), own('follows', 'creator_id', 'created_at'),
       own('feedback'), own('views'), own('play_starts'), own('plays'), own('reports', 'reporter_id'), own('blocks', 'blocker_id'),
@@ -497,7 +518,7 @@ export const supabaseApi = {
       exported_at: new Date().toISOString(),
       service: 'Nativity',
       account: { id, email: currentUser.email, created_at: currentUser.created_at, last_sign_in_at: currentUser.last_sign_in_at, sign_in_methods: currentUser.app_metadata?.providers || [] },
-      profile, age_record: age, policy_acceptances: acceptances, date_of_birth_corrections: corrections,
+      profile, age_record: age, residency_record: residency, residency_reviews: residencyReviews, policy_acceptances: acceptances, date_of_birth_corrections: corrections,
       games, notes: comments, cheers: likes, crews_you_joined: crews, people_in_your_crew_count: Array.isArray(crewMembers) ? crewMembers.length : crewMembers,
       stamps_you_gave: stamps, trailer_views: views, games_played: playStarts, rounds_played: rounds,
       reports_you_sent: reports, people_you_blocked: blocks,

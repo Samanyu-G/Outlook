@@ -272,17 +272,21 @@ export const demoApi = {
     const acc = (db.acceptances ||= []).filter((a) => a.user_id === uid)
     const corr = (db.corrections ||= []).filter((c) => c.user_id === uid).at(-1)
     const accepted = Object.fromEntries(acc.map((a) => [a.doc, a.version]))
-    const current = { terms: 'v2', privacy: 'v2' }
+    const current = { terms: 'v3', privacy: 'v3' }
+    const res = (db.residency ||= {})[uid]
+    const rev = (db.residencyReviews ||= []).filter((v) => v.user_id === uid).at(-1)
     return {
       ageStatus: age?.status ?? null, birthDate: age?.birth_date ?? null, accepted, current,
+      residencyStatus: res?.status ?? null, residencySignal: res?.signal ?? null, connectionCountry: demoCountry(),
+      residencyReview: rev ? { status: rev.status, note: rev.note, created_at: rev.created_at } : null,
       correction: corr ? { status: corr.status, requested_dob: corr.requested_dob, created_at: corr.created_at, note: corr.note } : null,
       rulesNotifiedAt: db.profiles[uid]?.rules_notified_at ?? null,
-      canParticipate: ['adult', 'operator'].includes(age?.status) && accepted.terms === current.terms && accepted.privacy === current.privacy,
+      canParticipate: ['adult', 'operator'].includes(age?.status) && ['resident', 'operator'].includes(res?.status) && accepted.terms === current.terms && accepted.privacy === current.privacy,
     }
   },
   async acceptPolicies(terms, privacy) {
     needUser()
-    if (terms !== 'v2' || privacy !== 'v2') throw new Error('The Terms or Privacy Policy changed. Reload Nativity to read the latest version.')
+    if (terms !== 'v3' || privacy !== 'v3') throw new Error('The Terms or Privacy Policy changed. Reload Nativity to read the latest version.')
     const uid = me().id
     for (const [doc, version] of [['terms', terms], ['privacy', privacy]]) {
       if (!(db.acceptances ||= []).some((a) => a.user_id === uid && a.doc === doc && a.version === version)) db.acceptances.push({ user_id: uid, doc, version, accepted_at: new Date().toISOString() })
@@ -323,15 +327,59 @@ export const demoApi = {
     if (approve) { const ok = isAdult(c.requested_dob); db.age[c.user_id] = { status: ok ? 'adult' : 'ineligible', birth_date: ok ? c.requested_dob : null, checked_at: new Date().toISOString() } }
     Object.assign(c, { status: approve ? 'approved' : 'rejected', note }); save()
   },
+  // Demo mode has no real connection country: it pretends you're in India unless
+  // localStorage 'nativity:demo-country' says otherwise (for testing other cases).
+  async confirmResidency(india, note = '') {
+    needUser()
+    const uid = me().id
+    const cur = (db.residency ||= {})[uid]?.status
+    if (cur === 'resident') throw new Error('Your residency is already confirmed.')
+    if (cur === 'not_resident') throw new Error('This account is recorded as living outside India. If that’s wrong, ask for a review.')
+    const c = demoCountry()
+    const reviews = (db.residencyReviews ||= [])
+    let status
+    if (!india) status = 'not_resident'
+    else if (c === 'IN') { status = 'resident'; reviews.filter((v) => v.user_id === uid && v.status === 'pending').forEach((v) => { v.status = 'approved'; v.note = 'Confirmed automatically: you checked again from a connection in India.' }) }
+    else { status = 'review'; if (!reviews.some((v) => v.user_id === uid && v.status === 'pending')) reviews.push({ id: 'r' + Date.now(), user_id: uid, user_note: note, signal: c, status: 'pending', created_at: new Date().toISOString() }) }
+    db.residency[uid] = { status, signal: c, declared: !!india }
+    save(); return status
+  },
+  async requestResidencyReview(note) {
+    needUser()
+    const uid = me().id
+    if (!note || note.trim().length < 10) throw new Error('Tell us a bit more (at least 10 characters).')
+    const reviews = (db.residencyReviews ||= [])
+    const p = reviews.find((v) => v.user_id === uid && v.status === 'pending')
+    if (p) p.user_note = note.trim(); else reviews.push({ id: 'r' + Date.now(), user_id: uid, user_note: note.trim(), signal: demoCountry(), status: 'pending', created_at: new Date().toISOString() })
+    if (db.residency?.[uid]?.status === 'not_resident') db.residency[uid].status = 'review'
+    save()
+  },
+  async listResidencyReviews() {
+    return (db.residencyReviews || []).filter((v) => v.status === 'pending').map((v) => ({
+      id: v.id, user_id: v.user_id, handle: db.profiles[v.user_id]?.handle, current_status: db.residency?.[v.user_id]?.status,
+      declared_india: db.residency?.[v.user_id]?.declared ?? true, signal_country: v.signal, note: v.user_note, created_at: v.created_at,
+    }))
+  },
+  async reviewResidency(id, approve, note) {
+    const v = (db.residencyReviews || []).find((x) => x.id === id)
+    if (!v) throw new Error('That request was already reviewed.')
+    if (v.user_id === me()?.id) throw new Error('Another moderator must review your own request.')
+    db.residency[v.user_id] = { ...db.residency[v.user_id], status: approve ? 'resident' : 'not_resident' }
+    Object.assign(v, { status: approve ? 'approved' : 'rejected', note }); save()
+  },
   async ackRulesNotice() { if (me()) { db.profiles[me().id].rules_notified_at = new Date().toISOString(); save() } },
   async exportMyData() {
     const uid = me().id
     const mine = (k, col = 'user_id') => (db[k] || []).filter((x) => x[col] === uid)
     return {
       exported_at: new Date().toISOString(), service: 'Nativity (demo mode)', account: { id: uid, email: me().email },
-      profile: db.profiles[uid], age_record: db.age?.[uid] ?? null, policy_acceptances: mine('acceptances'), date_of_birth_corrections: mine('corrections'),
+      profile: db.profiles[uid], age_record: db.age?.[uid] ?? null, residency_record: db.residency?.[uid] ?? null, policy_acceptances: mine('acceptances'), date_of_birth_corrections: mine('corrections'),
       notes: mine('comments'), cheers: mine('likes'), crews_you_joined: mine('follows', 'follower_id'), stamps_you_gave: mine('feedback'),
       trailer_views: mine('views'), games_played: mine('play_starts'), rounds_played: mine('plays'), people_you_blocked: mine('blocks', 'blocker_id'),
     }
   },
+}
+
+function demoCountry() {
+  try { return localStorage.getItem('nativity:demo-country') || 'IN' } catch { return 'IN' }
 }
