@@ -2,6 +2,7 @@
 // Security is NOT enforced here: it's enforced by the RLS policies in
 // supabase/migrations/0001_init.sql. This file just asks politely.
 import { supabase } from './supabase.js'
+import { buildMailbox, buildStudio } from './activity.js'
 
 let currentUser = null
 
@@ -34,7 +35,7 @@ async function listAllFiles(bucket, prefix) {
   return out
 }
 
-function toGame(row, likedIds, followingIds) {
+function toGame(row, likedIds, followingIds, playedIds = new Set()) {
   return {
     id: row.id,
     title: row.title,
@@ -56,8 +57,12 @@ function toGame(row, likedIds, followingIds) {
     likes: row.like_count,
     comments: row.comment_count,
     views: row.view_count,
+    players: row.player_count ?? 0,
+    // Stamp totals (0007_screens.sql). Missing before that migration runs: all zero.
+    stamps: { fun: row.stamp_fun ?? 0, clever: row.stamp_clever ?? 0, pretty: row.stamp_pretty ?? 0, tough: row.stamp_tough ?? 0, more: row.stamp_more ?? 0 },
     liked: likedIds.has(row.id),
     following: followingIds.has(row.creator_id),
+    played: playedIds.has(row.id),
   }
 }
 
@@ -134,6 +139,7 @@ export const supabaseApi = {
   },
 
   /* ---------- feed ---------- */
+  // tab: 'foryou' | 'fresh' | 'following' | 'all' (everything, for Find and Shelves)
   async listFeed(tab) {
     let followingIds = new Set()
     if (isMember(currentUser)) {
@@ -143,22 +149,28 @@ export const supabaseApi = {
     if (tab === 'following' && followingIds.size === 0) return []
 
     // The order is decided in the database by ranked_feed() (see 0004_feed.sql).
-    let res = await supabase.rpc('ranked_feed', { p_tab: tab, p_limit: 50 })
+    const all = tab === 'all'
+    let res = await supabase.rpc('ranked_feed', { p_tab: all ? 'foryou' : tab, p_limit: all ? 100 : 50 })
     if (res.error?.code === 'PGRST202') {
       // ranked_feed() isn't installed yet (0004_feed.sql not run): simple newest-first order.
       let q = supabase.from('game_feed').select('*')
       if (tab === 'following') q = q.in('creator_id', [...followingIds])
       q = tab === 'fresh' ? q.order('view_count', { ascending: true }) : q.order('created_at', { ascending: false })
-      res = await q.limit(50)
+      res = await q.limit(all ? 100 : 50)
     }
     const rows = must(res)
+    const ids = rows.map((r) => r.id)
 
-    let likedIds = new Set()
-    if (isMember(currentUser) && rows.length) {
-      const liked = must(await supabase.from('likes').select('game_id').eq('user_id', currentUser.id).in('game_id', rows.map((r) => r.id)))
+    let likedIds = new Set(), playedIds = new Set()
+    if (currentUser && rows.length) {
+      const [liked, played] = await Promise.all([
+        isMember(currentUser) ? supabase.from('likes').select('game_id').eq('user_id', currentUser.id).in('game_id', ids).then(must) : [],
+        supabase.from('play_starts').select('game_id').eq('user_id', currentUser.id).in('game_id', ids).then((r) => r.data || []),
+      ])
       likedIds = new Set(liked.map((r) => r.game_id))
+      playedIds = new Set(played.map((r) => r.game_id))
     }
-    return rows.map((r) => toGame(r, likedIds, followingIds))
+    return rows.map((r) => toGame(r, likedIds, followingIds, playedIds))
   },
 
   // Called after a trailer has been on screen for 3 seconds. Guests count too.
@@ -183,17 +195,20 @@ export const supabaseApi = {
     else must(await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('creator_id', creatorId))
   },
   async listComments(gameId) {
-    const [rows, blocked] = await Promise.all([
+    const [rows, blocked, fb] = await Promise.all([
       supabase.from('comments')
         .select('*, author:profiles(handle, avatar_color)')
         .eq('game_id', gameId)
         .order('created_at', { ascending: true })
         .limit(200).then(must),
       blockedIds(),
+      // Stamps are private: this returns only yours, or everyone's on your own game.
+      supabase.from('feedback').select('user_id, tags').eq('game_id', gameId).then((r) => r.data || []),
     ])
+    const stampOf = Object.fromEntries(fb.map((f) => [f.user_id, f.tags[0]]))
     return rows
       .filter((r) => !blocked.has(r.user_id))
-      .map((r) => ({ id: r.id, body: r.body, createdAt: r.created_at, userId: r.user_id, hidden: !!r.hidden, handle: r.author?.handle ?? 'unknown', color: r.author?.avatar_color ?? '#888888' }))
+      .map((r) => ({ id: r.id, body: r.body, createdAt: r.created_at, userId: r.user_id, hidden: !!r.hidden, handle: r.author?.handle ?? 'unknown', color: r.author?.avatar_color ?? '#888888', stamp: stampOf[r.user_id] || null }))
   },
   async deleteComment(id) {
     const rows = must(await supabase.from('comments').delete().eq('id', id).select('id'))
@@ -354,5 +369,79 @@ export const supabaseApi = {
     const [plays, likes, feedback] = await Promise.all([count('plays', 'user_id'), count('likes', 'user_id'), count('feedback', 'user_id')])
     const following = must(await supabase.from('follows').select('creator:profiles!follows_creator_id_fkey(id, handle, display_name, bio, avatar_color)').eq('follower_id', id))
     return { plays, likes, feedback, following: following.map((f) => f.creator).filter(Boolean) }
+  },
+  /* ---------- You, Mailbox, Studio (Phase 5) ---------- */
+  /** A maker's recent notes (comments), for the Talk tab on their profile. */
+  async listNotesBy(userId) {
+    const rows = must(await supabase.from('comments').select('id, body, created_at, game_id, game:games(title)').eq('user_id', userId).order('created_at', { ascending: false }).limit(20))
+    return rows.map((r) => ({ id: r.id, body: r.body, createdAt: r.created_at, gameId: r.game_id, gameTitle: r.game?.title ?? 'a game' }))
+  },
+  async getMyActivity() {
+    const id = currentUser.id
+    const count = async (table, col) => {
+      const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq(col, id)
+      return error ? 0 : count ?? 0
+    }
+    const [played, stamps, talk, following] = await Promise.all([
+      supabase.from('play_starts').select('game_id').eq('user_id', id).then((r) => (r.data || []).map((x) => x.game_id)),
+      count('feedback', 'user_id'),
+      count('comments', 'user_id'),
+      supabase.from('follows').select('creator:profiles!follows_creator_id_fkey(id, handle, display_name, bio, avatar_color)').eq('follower_id', id).then(must),
+    ])
+    return { playedIds: played, stamps, talk, following: following.map((f) => f.creator).filter(Boolean) }
+  },
+
+  /** Things that happened to you and your games, newest first. */
+  async listMailbox() {
+    const id = currentUser.id
+    const since = new Date(Date.now() - 30 * 864e5).toISOString()
+    const myGames = must(await supabase.from('game_feed').select('id, title, player_count').eq('creator_id', id))
+    const gameIds = myGames.map((g) => g.id)
+    const title = Object.fromEntries(myGames.map((g) => [g.id, g.title]))
+    const none = Promise.resolve([])
+    const [fb, cheers, crew, notes, mine] = await Promise.all([
+      gameIds.length ? supabase.from('feedback').select('game_id, tags, updated_at').in('game_id', gameIds).gte('updated_at', since).then((r) => r.data || []) : none,
+      gameIds.length ? supabase.from('likes').select('game_id, created_at').in('game_id', gameIds).gte('created_at', since).then((r) => r.data || []) : none,
+      supabase.from('follows').select('created_at, follower:profiles!follows_follower_id_fkey(handle)').eq('creator_id', id).gte('created_at', since).then((r) => r.data || []),
+      gameIds.length ? supabase.from('comments').select('id, game_id, body, created_at, user_id, author:profiles(handle)').in('game_id', gameIds).neq('user_id', id).gte('created_at', since).order('created_at', { ascending: false }).limit(50).then((r) => r.data || []) : none,
+      supabase.from('comments').select('game_id, created_at').eq('user_id', id).order('created_at', { ascending: true }).limit(200).then((r) => r.data || []),
+    ])
+    // Replies: other people's notes on games where you left a note (not your own games).
+    const firstNote = {}
+    for (const c of mine) if (!gameIds.includes(c.game_id) && !firstNote[c.game_id]) firstNote[c.game_id] = c.created_at
+    const replyGames = Object.keys(firstNote)
+    const replies = replyGames.length
+      ? (await supabase.from('comments').select('id, game_id, body, created_at, user_id, author:profiles(handle), game:games(title)').in('game_id', replyGames).neq('user_id', id).gte('created_at', since).order('created_at', { ascending: false }).limit(30)).data || []
+      : []
+    return buildMailbox({
+      games: myGames.map((g) => ({ id: g.id, title: g.title, players: g.player_count ?? 0 })),
+      stamps: fb.map((f) => ({ gameId: f.game_id, title: title[f.game_id], tags: f.tags, at: f.updated_at })),
+      cheers: cheers.map((l) => ({ gameId: l.game_id, title: title[l.game_id], at: l.created_at })),
+      crew: crew.map((f) => ({ handle: f.follower?.handle ?? 'someone', at: f.created_at })),
+      notes: notes.map((c) => ({ id: c.id, handle: c.author?.handle ?? 'someone', title: title[c.game_id], body: c.body, at: c.created_at })),
+      replies: replies.filter((c) => c.created_at > firstNote[c.game_id]).map((c) => ({ id: c.id, handle: c.author?.handle ?? 'someone', title: c.game?.title ?? 'a game', body: c.body, at: c.created_at })),
+    })
+  },
+
+  /** Numbers for one of your games (Studio). */
+  async getStudio(gameId) {
+    const id = currentUser.id
+    const [row, fb, notes] = await Promise.all([
+      supabase.from('game_feed').select('*').eq('id', gameId).maybeSingle().then(must),
+      supabase.from('feedback').select('tags').eq('game_id', gameId).then((r) => r.data || []),
+      supabase.from('comments').select('user_id, created_at').eq('game_id', gameId).order('created_at', { ascending: true }).then((r) => r.data || []),
+    ])
+    return buildStudio(row && { views: row.view_count, players: row.player_count ?? 0, likes: row.like_count, comments: row.comment_count }, fb.map((f) => f.tags), notes.map((n) => ({ mine: n.user_id === id })))
+  },
+
+  async deleteMyAccount() {
+    const mine = must(await supabase.from('games').select('id, builtin_key').eq('creator_id', currentUser.id))
+    for (const g of mine) if (!g.builtin_key) await this.deleteGame(g.id)
+    const { error } = await supabase.rpc('delete_my_account')
+    if (error?.code === 'PGRST202') throw new Error('Deleting accounts needs the 0007_screens.sql migration. Run it in Supabase first.')
+    if (error) throw new Error(error.message)
+    await supabase.auth.signOut()
+    blockedCache = null
+    await startGuest()
   },
 }

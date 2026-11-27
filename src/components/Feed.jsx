@@ -1,102 +1,47 @@
 import { useEffect, useRef, useState } from 'react'
-import { createRunner } from '../games/engine.js'
-import { BUILTIN_GAMES } from '../games/builtin.js'
-import { BOOST_VIEWS, fmt, initials } from '../lib/api.js'
-import { CommentIcon, HeartBurst, HeartIcon, MoreIcon, PlayIcon } from './Icons.jsx'
+import { BOOST_VIEWS } from '../lib/api.js'
+import Icon from './Icon.jsx'
+import { Avatar, Badge, CheerMeter, LiveTrailer } from './ui.jsx'
 
-/* The trailer: the game playing itself, only while its card is on screen. */
-function TrailerCanvas({ gameKey, active }) {
-  const canvasRef = useRef(null)
-  const runnerRef = useRef(null)
-
-  useEffect(() => {
-    const factory = BUILTIN_GAMES[gameKey]
-    if (!factory) return
-    const r = createRunner(canvasRef.current, factory, 'demo')
-    r.warm(1.5) // simulate 1.5s so the still frame isn't empty
-    runnerRef.current = r
-    return () => { r.destroy(); runnerRef.current = null }
-  }, [gameKey])
-
-  useEffect(() => {
-    const r = runnerRef.current
-    if (!r) return
-    if (active) r.start(); else r.stop()
-  }, [active, gameKey])
-
-  return <canvas ref={canvasRef} className="trailer" aria-hidden="true" />
-}
-
-/* Uploaded games: the creator's trailer video. Plays only while on screen. */
-function VideoTrailer({ src, active }) {
-  const ref = useRef(null)
-  useEffect(() => {
-    const v = ref.current
-    if (!v) return
-    if (active) v.play().catch(() => {})
-    else v.pause()
-  }, [active])
-  return <video ref={ref} className="trailer" src={src} muted loop playsInline preload={active ? 'auto' : 'metadata'} aria-hidden="true" />
-}
-
-function GameCard({ game, active, showCoach, onPlay, onLike, onFollow, onComments, onMore, bursts }) {
+// One game as a "cartridge card" (Figma: Cartridge Card): trailer window on top, info panel below.
+function GameCard({ game, active, showCoach, dataSaver, onPlay, onFollow, onOpen, onMaker }) {
   const c = game.creator
   const [captionOpen, setCaptionOpen] = useState(false)
   return (
     <>
-      {game.builtinKey
-        ? <TrailerCanvas gameKey={game.builtinKey} active={active} />
-        : <VideoTrailer src={game.trailerUrl} active={active} />}
-      <div className="shade" />
-      <div className="chips-top">
-        <span className="chip-trailer"><i />Trailer</span>
-        {game.touchFriendly === false && <span className="chip-trailer">Needs keyboard</span>}
-      </div>
-      <button type="button" className="play" onClick={() => onPlay(game)} aria-label={`Play ${game.title}`}>
-        <span className="disc"><PlayIcon /></span>
-        <span className="lbl">Tap to play</span>
-        <span className="sub">or swipe ←</span>
-      </button>
-      {showCoach && <div className="coach">↑ Swipe up for the next game</div>}
-
-      <aside className="rail">
-        <button type="button" className="avatar" aria-pressed={game.following} aria-label={`${game.following ? 'Unfollow' : 'Follow'} @${c.handle}`} style={{ background: c.color }} onClick={() => onFollow(game)}>
-          {initials(c.name || c.handle)}<span className="plus">{game.following ? '✓' : '+'}</span>
-        </button>
-        <button type="button" aria-pressed={game.liked} aria-label="Like" onClick={() => onLike(game, !game.liked)}>
-          <HeartIcon /><span>{fmt(game.likes)}</span>
-        </button>
-        <button type="button" aria-label="Comments" onClick={() => onComments(game)}>
-          <CommentIcon /><span>{fmt(game.comments)}</span>
-        </button>
-        <button type="button" aria-label="More options" onClick={() => onMore(game)}>
-          <MoreIcon /><span>More</span>
-        </button>
-      </aside>
-
-      <div className="meta">
-        {game.views < BOOST_VIEWS && (
-          <div className="boost">
-            <b>Fresh creator boost</b>
-            <span>Guaranteed views: {game.views} of {BOOST_VIEWS}</span>
-            <div className="bar"><i style={{ width: `${(game.views / BOOST_VIEWS) * 100}%` }} /></div>
-          </div>
-        )}
-        <div className="who">
-          <strong>@{c.handle}</strong>
-          <button type="button" className="follow-btn" aria-pressed={game.following} onClick={() => onFollow(game)}>
-            {game.following ? 'Following' : 'Follow'}
-          </button>
+      <div className="window">
+        <LiveTrailer game={game} active={active} dataSaver={dataSaver} />
+        <button type="button" className="window-hit" onClick={() => onPlay(game)} aria-label={`Play ${game.title}`} />
+        <div className="chips-top">
+          <span className="chip-trailer"><i />Trailer</span>
+          {game.views < BOOST_VIEWS && <Badge kind="fresh">Fresh maker</Badge>}
+          {game.touchFriendly === false && <Badge kind="keys">Keyboard</Badge>}
         </div>
-        <h2>{game.title}</h2>
+        {showCoach && <div className="coach">Swipe ← for the next game</div>}
+      </div>
+
+      <div className="info">
+        <div className="info-h">
+          <h2>{game.title}</h2>
+          <button type="button" className="info-more" onClick={() => onOpen(game)} aria-label={`About ${game.title}`}><i /><i /><i /></button>
+        </div>
         {/* Caption is collapsed to one line, like Instagram. Tap to expand. */}
         <button type="button" className={`caption${captionOpen ? ' open' : ''}`} aria-expanded={captionOpen} onClick={() => setCaptionOpen((o) => !o)}>
           <span className="txt">{game.description}</span>
           <span className="more">{captionOpen ? 'less' : 'more'}</span>
         </button>
-        {captionOpen && <div className="tags">{game.tags.map((t) => <span key={t}>#{t}</span>)}</div>}
+        {captionOpen && game.tags.length > 0 && <div className="tags">{game.tags.map((t) => <span key={t}>#{t}</span>)}</div>}
+        <div className="who">
+          <button type="button" className="who-id" onClick={() => onMaker(game)}>
+            <Avatar name={c.name || c.handle} color={c.color} size={32} />
+            <strong>@{c.handle}</strong>
+          </button>
+          <button type="button" className="join" aria-pressed={game.following} aria-label={`${game.following ? 'Leave' : 'Join'} @${c.handle}’s crew`} onClick={() => onFollow(game)}>
+            <Icon name={game.following ? 'check' : 'crew'} size={16} />{game.following ? 'Joined' : 'Join'}
+          </button>
+          <CheerMeter stamps={game.stamps} />
+        </div>
       </div>
-      {bursts.map((b) => <HeartBurst key={b.id} x={b.x} y={b.y} />)}
     </>
   )
 }
@@ -104,11 +49,10 @@ function GameCard({ game, active, showCoach, onPlay, onLike, onFollow, onComment
 const COACH_KEY = 'nativity:coach-seen'
 const readCoach = () => { try { return localStorage.getItem(COACH_KEY) === '1' } catch { return true } }
 
-export default function Feed({ games, loading, error, tab, paused, onPlay, onLike, onFollow, onComments, onMore, onView, onRetry, onFindFresh }) {
+export default function Feed({ games, loading, error, tab, paused, autoplay = true, dataSaver = false, onActive, onPlay, onFollow, onOpen, onMaker, onView, onRetry, onFindFresh }) {
   const feedRef = useRef(null)
   const [activeId, setActiveId] = useState(null)
   const [coachSeen, setCoachSeen] = useState(readCoach)
-  const [bursts, setBursts] = useState([])
   const seenRef = useRef(new Set())
 
   // Work out which card is on screen (at least 60% visible).
@@ -122,8 +66,11 @@ export default function Feed({ games, loading, error, tab, paused, onPlay, onLik
     return () => io.disconnect()
   }, [games])
 
-  // New list (tab switch / refresh) -> back to the top.
-  useEffect(() => { feedRef.current?.scrollTo({ top: 0 }) }, [tab])
+  // Tell the app which card is centred (the Dock's Cheer / Talk / More act on it).
+  useEffect(() => { onActive?.(activeId || games[0]?.id || null) }, [activeId, games]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // New list (tab switch / refresh) -> back to the start.
+  useEffect(() => { feedRef.current?.scrollTo({ left: 0 }) }, [tab])
 
   // A view only counts once the trailer has been on screen for 3 seconds.
   // Swiping past quickly doesn't count, so creators get honest numbers.
@@ -134,7 +81,7 @@ export default function Feed({ games, loading, error, tab, paused, onPlay, onLik
     return () => clearTimeout(timer)
   }, [activeId, paused]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Hide the "swipe up" hint after the first swipe.
+  // Hide the "swipe" hint after the first swipe.
   useEffect(() => {
     if (!activeId) return
     if (!coachSeen && games.length && activeId !== games[0].id) {
@@ -143,53 +90,74 @@ export default function Feed({ games, loading, error, tab, paused, onPlay, onLik
     }
   }, [activeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Gestures: double-tap = like, swipe left = play.
+  // Gestures: swipe sideways = next game (native scroll). With a mouse you can
+  // also drag the row, or use the wheel / arrow keys.
   const down = useRef(null)
-  const lastTap = useRef({ t: 0, id: null, x: 0, y: 0 })
+  const dragged = useRef(false)
   const onPointerDown = (e) => {
-    const card = e.target.closest('.card')
-    down.current = card ? { x: e.clientX, y: e.clientY, t: Date.now(), id: card.dataset.id, onButton: !!e.target.closest('button'), card } : null
+    down.current = { x: e.clientX, mouse: e.pointerType === 'mouse', left: feedRef.current.scrollLeft }
+    dragged.current = false
   }
-  const onPointerUp = (e) => {
-    const d = down.current; down.current = null
-    if (!d) return
-    const game = games.find((g) => g.id === d.id)
-    if (!game) return
-    const dx = e.clientX - d.x, dy = e.clientY - d.y
-    if (dx < -70 && Math.abs(dy) < 60) { onPlay(game); return }
-    if (d.onButton || Math.hypot(dx, dy) > 12 || Date.now() - d.t > 300) return
-    const now = Date.now(), lt = lastTap.current
-    if (lt.id === d.id && now - lt.t < 320 && Math.hypot(e.clientX - lt.x, e.clientY - lt.y) < 40) {
-      const r = d.card.getBoundingClientRect()
-      const burst = { id: now, gameId: d.id, x: e.clientX - r.left, y: e.clientY - r.top }
-      setBursts((b) => [...b, burst])
-      setTimeout(() => setBursts((b) => b.filter((x) => x !== burst)), 850)
-      if (!game.liked) onLike(game, true)
-      lastTap.current = { t: 0, id: null }
-    } else {
-      lastTap.current = { t: now, id: d.id, x: e.clientX, y: e.clientY }
-    }
+  const onPointerMove = (e) => {
+    const d = down.current
+    if (!d || !d.mouse || !(e.buttons & 1)) return
+    const dx = e.clientX - d.x
+    if (!dragged.current && Math.abs(dx) > 6) { dragged.current = true; feedRef.current.classList.add('dragging') }
+    if (dragged.current) feedRef.current.scrollLeft = d.left - dx
+  }
+  const endDrag = () => {
+    const root = feedRef.current
+    if (!root?.classList.contains('dragging')) return
+    root.classList.remove('dragging')
+    // Settle on the nearest card after a mouse drag.
+    const cards = [...root.querySelectorAll('.card')]
+    if (!cards.length) return
+    const mid = root.scrollLeft + root.clientWidth / 2
+    const near = cards.reduce((a, b) => (Math.abs(b.offsetLeft + b.offsetWidth / 2 - mid) < Math.abs(a.offsetLeft + a.offsetWidth / 2 - mid) ? b : a))
+    near.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+  }
+  const onPointerUp = () => { down.current = null; endDrag() }
+  // A click that ends a mouse drag shouldn't press the button under the cursor.
+  const onClickCapture = (e) => { if (dragged.current) { e.stopPropagation(); e.preventDefault(); dragged.current = false } }
+  // Mouse wheel scrolls the row sideways; arrow keys step one card.
+  const onWheel = (e) => {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) feedRef.current.scrollLeft += e.deltaY
+  }
+  const step = (dir) => {
+    const root = feedRef.current
+    const card = root?.querySelector('.card')
+    if (card) root.scrollBy({ left: dir * (card.offsetWidth + 12), behavior: 'smooth' })
+  }
+  const onKeyDown = (e) => {
+    if (e.target.closest('input, textarea')) return
+    if (e.key === 'ArrowRight') { e.preventDefault(); step(1) }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1) }
   }
 
   let body
   if (loading && !games.length) body = <div className="empty"><p>Loading games…</p></div>
   else if (error) body = <div className="empty"><h3>Couldn’t load the feed</h3><p>{error}</p><button type="button" onClick={onRetry}>Try again</button></div>
-  else if (!games.length && tab === 'following') body = <div className="empty"><h3>No one followed yet</h3><p>Follow a creator from any game and their new games will show up here first.</p><button type="button" onClick={onFindFresh}>Find fresh creators</button></div>
+  else if (!games.length && tab === 'following') body = <div className="empty"><h3>Your crew is empty</h3><p>Join a maker’s crew from any game and their new games will show up here first.</p><button type="button" onClick={onFindFresh}>Find fresh creators</button></div>
   else if (!games.length) body = <div className="empty"><h3>No games yet</h3><p>Be the first to upload one.</p></div>
   else body = games.map((g, i) => (
     <section key={g.id} className="card" data-id={g.id} aria-label={`${g.title} by @${g.creator.handle}`}>
       <GameCard
         game={g}
-        active={!paused && activeId === g.id}
+        active={autoplay && !paused && (activeId || games[0]?.id) === g.id}
         showCoach={i === 0 && !coachSeen}
-        bursts={bursts.filter((b) => b.gameId === g.id)}
-        onPlay={onPlay} onLike={onLike} onFollow={onFollow} onComments={onComments} onMore={onMore}
+        dataSaver={dataSaver}
+        onPlay={onPlay} onFollow={onFollow} onOpen={onOpen} onMaker={onMaker}
       />
     </section>
   ))
 
   return (
-    <div className="feed" ref={feedRef} onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerCancel={() => { down.current = null }}>
+    <div
+      className="feed" ref={feedRef} tabIndex={-1} aria-label="Games, swipe sideways"
+      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+      onPointerCancel={() => { down.current = null; endDrag() }} onClickCapture={onClickCapture}
+      onWheel={onWheel} onKeyDown={onKeyDown}
+    >
       {body}
     </div>
   )

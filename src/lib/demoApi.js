@@ -2,6 +2,8 @@
 // browser's localStorage. Used automatically when .env has no Supabase keys,
 // so you can try the app (and so tests work offline). Nothing here is shared.
 
+import { buildMailbox, buildStudio, countStamps } from './activity.js'
+
 const KEY = 'nativity:demo:v1'
 const COLORS = ['#f4b6a0', '#b9cde6', '#b7d3c0', '#f2d98d', '#e7b3c0']
 const ago = (ms) => new Date(Date.now() - ms).toISOString()
@@ -41,12 +43,20 @@ function seed() {
   const follows = []
   const fakeFollows = { c1: 14, c2: 3, c3: 0, c4: 212, c5: 41 }
   for (const [c, n] of Object.entries(fakeFollows)) for (let i = 0; i < n; i++) follows.push({ follower_id: `fake${i}`, creator_id: c })
-  return { profiles, games, comments, views, likes, follows, feedback: [], plays: [], session: null }
+  const feedback = []
+  const fakeStamps = { g1: ['Fun', 'Fun', 'Clever', 'Pretty', 'Fun', 'Want more'], g2: ['Tough', 'Fun', 'Tough'], g3: ['Fun', 'Pretty'], g4: ['Fun', 'Clever', 'Tough', 'Fun'], g5: ['Clever', 'Fun', 'Want more', 'Pretty'] }
+  for (const [g, tags] of Object.entries(fakeStamps)) tags.forEach((t, i) => feedback.push({ user_id: `fake${i}`, game_id: g, tags: [t], updated_at: ago(i * 5 * H) }))
+  const play_starts = []
+  const fakePlayers = { g1: 41, g2: 20, g3: 6, g4: 402, g5: 52 }
+  for (const [g, n] of Object.entries(fakePlayers)) for (let i = 0; i < n; i++) play_starts.push({ user_id: `fake${i}`, game_id: g })
+  return { profiles, games, comments, views, likes, follows, feedback, plays: [], play_starts, session: null }
 }
 
 let db
 try { db = JSON.parse(localStorage.getItem(KEY)) } catch { db = null }
 if (!db) db = seed()
+// Browsers that saved demo data before Phase 5 don't have these yet.
+if (!db.play_starts) { const fresh = seed(); db.play_starts = fresh.play_starts; db.feedback = [...fresh.feedback, ...db.feedback] }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)) } catch { /* storage full or blocked */ } }
 
 const listeners = new Set()
@@ -98,8 +108,12 @@ export const demoApi = {
         likes: db.likes.filter((l) => l.game_id === g.id).length,
         comments: db.comments.filter((c) => c.game_id === g.id).length,
         views: db.views.filter((v) => v.game_id === g.id).length,
+        players: new Set(db.play_starts.filter((x) => x.game_id === g.id).map((x) => x.user_id)).size,
+        stamps: countStamps(db.feedback.filter((f) => f.game_id === g.id).map((f) => f.tags)),
         liked: db.likes.some((l) => l.game_id === g.id && l.user_id === uid),
         following: following.has(g.creator_id),
+        played: db.play_starts.some((x) => x.game_id === g.id && x.user_id === (uid || 'guest')),
+        touchFriendly: true,
       }
     })
     if (tab === 'following') games = games.filter((g) => g.following)
@@ -111,7 +125,10 @@ export const demoApi = {
     if (!db.views.some((v) => v.user_id === uid && v.game_id === gameId)) { db.views.push({ user_id: uid, game_id: gameId }); save() }
   },
 
-  async recordPlayStart() { /* demo mode doesn't rank the feed */ },
+  async recordPlayStart(gameId) {
+    const uid = me()?.id || 'guest'
+    if (!db.play_starts.some((x) => x.user_id === uid && x.game_id === gameId)) { db.play_starts.push({ user_id: uid, game_id: gameId }); save() }
+  },
 
   async setLike(gameId, on) {
     needUser(); const uid = me().id
@@ -131,7 +148,8 @@ export const demoApi = {
     const blocked = new Set((db.blocks || []).filter((b) => b.blocker_id === me()?.id).map((b) => b.blocked_id))
     return db.comments.filter((c) => c.game_id === gameId && !blocked.has(c.user_id)).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((c) => {
       const p = db.profiles[c.user_id]
-      return { id: c.id, body: c.body, createdAt: c.created_at, userId: c.user_id, handle: p?.handle ?? 'unknown', color: p?.avatar_color ?? '#888888' }
+      const f = db.feedback.find((x) => x.game_id === gameId && x.user_id === c.user_id)
+      return { id: c.id, body: c.body, createdAt: c.created_at, userId: c.user_id, handle: p?.handle ?? 'unknown', color: p?.avatar_color ?? '#888888', stamp: f?.tags[0] ?? null }
     })
   },
   async addComment(gameId, body) {
@@ -144,7 +162,7 @@ export const demoApi = {
   async sendFeedback(gameId, tags) {
     needUser(); const uid = me().id
     db.feedback = db.feedback.filter((f) => !(f.user_id === uid && f.game_id === gameId))
-    db.feedback.push({ user_id: uid, game_id: gameId, tags }); save()
+    db.feedback.push({ user_id: uid, game_id: gameId, tags, updated_at: new Date().toISOString() }); save()
   },
   async getMyFeedback(gameId) {
     const uid = me()?.id
@@ -175,7 +193,14 @@ export const demoApi = {
   // Uploads need real storage, so they only work with Supabase connected.
   canUpload: false,
   async createGame() { throw new Error('Uploading needs the live database. Connect Supabase first (see README).') },
-  async listMyGames() { return [] },
+  async listMyGames() {
+    const uid = me()?.id
+    return db.games.filter((g) => g.creator_id === uid).map((g) => ({
+      id: g.id, title: g.title, status: 'published', createdAt: g.created_at, builtin: !!g.builtin_key,
+      likes: db.likes.filter((l) => l.game_id === g.id).length, comments: db.comments.filter((c) => c.game_id === g.id).length,
+      views: db.views.filter((v) => v.game_id === g.id).length, players: new Set(db.play_starts.filter((x) => x.game_id === g.id).map((x) => x.user_id)).size,
+    }))
+  },
   async deleteGame() { throw new Error('Not available in demo mode.') },
 
   async getMyStats() {
@@ -186,5 +211,55 @@ export const demoApi = {
       feedback: db.feedback.filter((f) => f.user_id === uid).length,
       following: db.follows.filter((f) => f.follower_id === uid).map((f) => db.profiles[f.creator_id]).filter(Boolean),
     }
+  },
+
+  async listNotesBy(userId) {
+    const title = Object.fromEntries(db.games.map((g) => [g.id, g.title]))
+    return db.comments.filter((c) => c.user_id === userId).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 20)
+      .map((c) => ({ id: c.id, body: c.body, createdAt: c.created_at, gameId: c.game_id, gameTitle: title[c.game_id] ?? 'a game' }))
+  },
+  async getMyActivity() {
+    const uid = me().id
+    return {
+      playedIds: [...new Set(db.play_starts.filter((x) => x.user_id === uid).map((x) => x.game_id))],
+      stamps: db.feedback.filter((f) => f.user_id === uid).length,
+      talk: db.comments.filter((c) => c.user_id === uid).length,
+      following: db.follows.filter((f) => f.follower_id === uid).map((f) => db.profiles[f.creator_id]).filter(Boolean),
+    }
+  },
+  async listMailbox() {
+    const uid = me().id
+    const mine = db.games.filter((g) => g.creator_id === uid)
+    const ids = new Set(mine.map((g) => g.id))
+    const title = Object.fromEntries(db.games.map((g) => [g.id, g.title]))
+    const players = (id) => new Set(db.play_starts.filter((x) => x.game_id === id).map((x) => x.user_id)).size
+    return buildMailbox({
+      games: mine.map((g) => ({ id: g.id, title: g.title, players: players(g.id) })),
+      stamps: db.feedback.filter((f) => ids.has(f.game_id) && f.updated_at).map((f) => ({ gameId: f.game_id, title: title[f.game_id], tags: f.tags, at: f.updated_at })),
+      cheers: [],
+      crew: [],
+      notes: db.comments.filter((c) => ids.has(c.game_id) && c.user_id !== uid).map((c) => ({ id: c.id, handle: db.profiles[c.user_id]?.handle ?? 'someone', title: title[c.game_id], body: c.body, at: c.created_at })),
+      replies: [],
+    })
+  },
+  async getStudio(gameId) {
+    const uid = me().id
+    const g = db.games.find((x) => x.id === gameId)
+    if (!g) return null
+    const row = {
+      views: db.views.filter((v) => v.game_id === gameId).length,
+      players: new Set(db.play_starts.filter((x) => x.game_id === gameId).map((x) => x.user_id)).size,
+      likes: db.likes.filter((l) => l.game_id === gameId).length,
+      comments: db.comments.filter((c) => c.game_id === gameId).length,
+    }
+    const notes = db.comments.filter((c) => c.game_id === gameId).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((c) => ({ mine: c.user_id === uid }))
+    return buildStudio(row, db.feedback.filter((f) => f.game_id === gameId).map((f) => f.tags), notes)
+  },
+  async deleteMyAccount() {
+    const uid = me().id
+    delete db.profiles[uid]
+    for (const k of ['likes', 'feedback', 'plays', 'views', 'comments', 'play_starts']) db[k] = db[k].filter((x) => x.user_id !== uid)
+    db.follows = db.follows.filter((f) => f.follower_id !== uid && f.creator_id !== uid)
+    db.session = null; save(); listeners.forEach((l) => l(null))
   },
 }

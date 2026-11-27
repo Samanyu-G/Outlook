@@ -37,7 +37,19 @@ var store={
   get length(){return Object.keys(d).length}
 };
 try{Object.defineProperty(window,'localStorage',{configurable:true,get:function(){return store}})}catch(e){}
-window.Nativity={gameOver:function(score){parent.postMessage({type:'nativity:gameover',score:score},'*')}};
+var pauseFns=[],muteFns=[],ctxs=[],muted=false;
+// Track Web Audio contexts so the Sound button can silence them.
+['AudioContext','webkitAudioContext'].forEach(function(n){var C=window[n];if(!C)return;var W=function(){var c=new (Function.prototype.bind.apply(C,[null].concat([].slice.call(arguments))))();ctxs.push(c);if(muted)try{c.suspend()}catch(e){}return c};W.prototype=C.prototype;window[n]=W});
+function applyMute(){document.querySelectorAll('audio,video').forEach(function(m){m.muted=muted});ctxs.forEach(function(c){try{muted?c.suspend():c.resume()}catch(e){}})}
+window.addEventListener('message',function(e){var m=e.data;if(!m||e.source!==parent)return;
+  if(m.type==='nativity:pause'){pauseFns.forEach(function(f){try{f(!!m.paused)}catch(err){}});ctxs.forEach(function(c){try{m.paused?c.suspend():(!muted&&c.resume())}catch(err){}})}
+  if(m.type==='nativity:mute'){muted=!!m.muted;applyMute();muteFns.forEach(function(f){try{f(muted)}catch(err){}})}
+});
+window.Nativity={
+  gameOver:function(score){parent.postMessage({type:'nativity:gameover',score:score},'*')},
+  onPause:function(f){if(typeof f==='function')pauseFns.push(f)},
+  onMute:function(f){if(typeof f==='function')muteFns.push(f)}
+};
 })();</script>`
 }
 
@@ -48,7 +60,7 @@ function buildDoc(html, baseUrl, saved) {
   return '<!doctype html><head>' + head + '</head>' + html
 }
 
-export default function FrameGame({ game, runKey, onGameOver }) {
+export default function FrameGame({ game, runKey, onGameOver, paused = false, muted = false }) {
   const frameRef = useRef(null)
   const [doc, setDoc] = useState(null)
   const [error, setError] = useState('')
@@ -83,6 +95,10 @@ export default function FrameGame({ game, runKey, onGameOver }) {
     return () => window.removeEventListener('message', onMessage)
   }, [game.id])
 
+  // Pause and Sound buttons: tell the game (it can listen with Nativity.onPause / onMute).
+  useEffect(() => { frameRef.current?.contentWindow?.postMessage({ type: 'nativity:pause', paused }, '*') }, [paused, doc])
+  useEffect(() => { frameRef.current?.contentWindow?.postMessage({ type: 'nativity:mute', muted }, '*') }, [muted, doc])
+
   if (error) return <div className="frame-msg"><p>{error}</p></div>
   if (!doc) return <div className="frame-msg"><p>Loading game…</p></div>
   return (
@@ -95,6 +111,7 @@ export default function FrameGame({ game, runKey, onGameOver }) {
       allow="autoplay; fullscreen; gamepad"
       referrerPolicy="no-referrer"
       srcDoc={doc}
+      onLoad={() => { const w = frameRef.current?.contentWindow; w?.postMessage({ type: 'nativity:mute', muted }, '*'); if (paused) w?.postMessage({ type: 'nativity:pause', paused }, '*') }}
     />
   )
 }

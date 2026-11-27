@@ -2,29 +2,33 @@ import { useEffect, useRef, useState } from 'react'
 import { createRunner } from '../games/engine.js'
 import { BUILTIN_GAMES } from '../games/builtin.js'
 import { api } from '../lib/api.js'
+import { STAMPS, stampKey } from '../lib/activity.js'
 import FrameGame from './FrameGame.jsx'
-import { CloseIcon, CommentIcon, HeartIcon } from './Icons.jsx'
+import Icon from './Icon.jsx'
+import { CheerSlot } from './CheerSlot.jsx'
+import { CloseButton, Dock, DockSlot, Stamp } from './ui.jsx'
 
-const FEEDBACK = ['Fun', 'Too hard', 'Too easy', 'Confusing controls', 'Great visuals', 'Want more levels']
+const SOUND_KEY = 'nativity:muted'
 
-// Full-screen play mode. While it's open the feed is covered, so swipes go to the game.
+// Playing (Figma 02). Night theme so the game's own colours stand out.
 // Built-in demo games draw on a canvas; uploaded games run in a sandboxed frame.
-export default function Player({ game, user, onClose, onLike, onFollow, onComments, onPlayed, onFeedback, onNeedSignIn }) {
+export default function Player({ game, user, onClose, onCheer, onStampPicker, onFollow, onComments, onPlayed, onFeedback, onNeedSignIn }) {
   const uploaded = !game.builtinKey
   const canvasRef = useRef(null)
   const runnerRef = useRef(null)
   const [score, setScore] = useState(0)
   const [over, setOver] = useState(null) // { score: number|null, prevBest }
   const [runKey, setRunKey] = useState(0)
-  const [chips, setChips] = useState([])
-  const [sentChips, setSentChips] = useState(null)
+  const [paused, setPaused] = useState(false)
+  const [muted, setMuted] = useState(() => { try { return localStorage.getItem(SOUND_KEY) === '1' } catch { return false } })
+  const [picked, setPicked] = useState([])
+  const [sent, setSent] = useState(null)
   const [sending, setSending] = useState(false)
   const sessionBest = useRef(0)
 
   const onPlayedRef = useRef(onPlayed)
   useEffect(() => { onPlayedRef.current = onPlayed })
 
-  // Called when a round ends (score may be null if the game doesn't report one).
   async function finishRound(sc) {
     let prevBest = 0
     if (sc !== null) {
@@ -38,7 +42,6 @@ export default function Player({ game, user, onClose, onLike, onFollow, onCommen
   const finishRef = useRef(finishRound)
   useEffect(() => { finishRef.current = finishRound })
 
-  // Built-in canvas games.
   useEffect(() => {
     const factory = BUILTIN_GAMES[game.builtinKey]
     if (!factory) return
@@ -51,12 +54,13 @@ export default function Player({ game, user, onClose, onLike, onFollow, onCommen
     return () => r.destroy()
   }, [game.id, game.builtinKey])
 
-  // Tell the ranking that someone tapped Play (guests count too).
   useEffect(() => { api.recordPlayStart(game.id).catch(() => {}) }, [game.id])
 
   useEffect(() => {
     if (!user) return
-    api.getMyFeedback(game.id).then((tags) => { if (tags) { setChips(tags); setSentChips(tags) } }).catch(() => {})
+    api.getMyFeedback(game.id).then((tags) => {
+      if (tags) { const keys = tags.map(stampKey).filter(Boolean); setPicked(keys); setSent(keys) }
+    }).catch(() => {})
   }, [game.id, user])
 
   useEffect(() => {
@@ -65,19 +69,30 @@ export default function Player({ game, user, onClose, onLike, onFollow, onCommen
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const toggleChip = (f) => setChips((c) => (c.includes(f) ? c.filter((x) => x !== f) : [...c, f]))
-  const unchanged = sentChips && chips.length === sentChips.length && chips.every((c) => sentChips.includes(c))
+  useEffect(() => {
+    const r = runnerRef.current
+    if (!r || over) return
+    if (paused) r.stop(); else r.start()
+  }, [paused, over])
 
+  function toggleSound() {
+    const m = !muted
+    setMuted(m)
+    try { localStorage.setItem(SOUND_KEY, m ? '1' : '0') } catch { /* ignore */ }
+  }
+
+  const toggle = (k) => setPicked((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))
+  const unchanged = sent && picked.length === sent.length && picked.every((k) => sent.includes(k))
   async function send() {
-    if (!user) { onNeedSignIn('Sign in to send feedback to creators.'); return }
+    if (!user) { onNeedSignIn('Sign in to stamp games and help makers.'); return }
     setSending(true)
-    const ok = await onFeedback(game, chips)
+    const ok = await onFeedback(game, STAMPS.filter((s) => picked.includes(s.key)).map((s) => s.tag))
     setSending(false)
-    if (ok) setSentChips(chips)
+    if (ok) setSent(picked)
   }
 
   function again() {
-    setOver(null); setScore(0)
+    setOver(null); setScore(0); setPaused(false)
     api.recordPlayStart(game.id).catch(() => {})
     if (uploaded) setRunKey((k) => k + 1)
     else runnerRef.current?.restart()
@@ -88,17 +103,25 @@ export default function Player({ game, user, onClose, onLike, onFollow, onCommen
   const isNewBest = hasScore && over.prevBest > 0 && over.score > over.prevBest
 
   return (
-    <section className={`player${uploaded ? ' framed' : ''}`} aria-label={`${game.title} player`}>
-      {uploaded
-        ? <FrameGame game={game} runKey={runKey} onGameOver={(sc) => finishRef.current(sc)} />
-        : <canvas ref={canvasRef} aria-label={`${game.title} game`} />}
-
+    <section className="player night" aria-label={`${game.title} player`}>
       <div className="p-head">
-        <button type="button" className="p-close" aria-label="Back to feed" onClick={onClose}><CloseIcon /></button>
+        <CloseButton onClick={onClose} label="Exit game" />
         <div className="p-title"><b>{game.title}</b><small>by @{game.creator.handle}</small></div>
         {uploaded
-          ? <button type="button" className="p-rate" onClick={() => setOver((o) => o || { score: null, prevBest: 0 })}>Rate</button>
+          ? <button type="button" className="p-score rate" onClick={() => setOver((o) => o || { score: null, prevBest: 0 })}>Rate</button>
           : <span className="p-score">{score}</span>}
+      </div>
+
+      <div className="p-stage">
+        {uploaded
+          ? <FrameGame game={game} runKey={runKey} paused={paused} muted={muted} onGameOver={(sc) => finishRef.current(sc)} />
+          : <canvas ref={canvasRef} aria-label={`${game.title} game`} />}
+        {uploaded && !over && <span className="sandbox-pill"><i />Sandboxed · can’t see your account</span>}
+        {paused && !over && (
+          <button type="button" className="paused" onClick={() => setPaused(false)}>
+            <span><Icon name="play" size={32} /></span><b>Paused</b><small>Tap to keep playing</small>
+          </button>
+        )}
       </div>
 
       {over && (
@@ -108,38 +131,36 @@ export default function Player({ game, user, onClose, onLike, onFollow, onCommen
               <div><div className="lbl">Your score</div><div className="big">{over.score}</div></div>
               <div className="best">{isNewBest ? 'New best!' : 'Best'}<b>{best}</b></div>
             </div>
-          ) : (
-            <h4 className="p-ask">How was {game.title}?</h4>
-          )}
-          <div className="row">
-            <button type="button" className="p-like" aria-pressed={game.liked} onClick={() => onLike(game, !game.liked)}>
-              <HeartIcon /><span>{game.liked ? 'Liked' : 'Like'}</span>
-            </button>
-            <button type="button" className="p-like" onClick={() => onComments(game)}><CommentIcon /><span>Comment</span></button>
-            <button type="button" className="p-like" aria-pressed={game.following} onClick={() => onFollow(game)}>
-              <span>{game.following ? 'Following' : `Follow @${game.creator.handle}`}</span>
-            </button>
-          </div>
+          ) : <h4 className="p-ask">How was {game.title}?</h4>}
           <div className="fb">
-            <h4>Quick feedback for @{game.creator.handle}</h4>
-            <p>{sentChips ? 'Sent. You can change it any time.' : 'Pick what fits. Only the creator sees it.'}</p>
-            <div className="chips">
-              {FEEDBACK.map((f) => (
-                <button key={f} type="button" aria-pressed={chips.includes(f)} onClick={() => toggleChip(f)}>{f}</button>
-              ))}
+            <h4>Stamp it for @{game.creator.handle}</h4>
+            <p>{sent ? 'Stamped. You can change it any time.' : 'Pick what fits. It helps a new maker know what worked.'}</p>
+            <div className="stamp-row">
+              {STAMPS.map((s) => <Stamp key={s.key} k={s.key} state={picked.includes(s.key) ? 'stamped' : 'unpicked'} pressed={picked.includes(s.key)} onClick={() => toggle(s.key)} />)}
             </div>
           </div>
           <div className="row">
-            <button type="button" className="btn" disabled={!chips.length || unchanged || sending} onClick={send}>
-              {sending ? 'Sending…' : sentChips ? 'Update feedback' : 'Send feedback'}
+            <button type="button" className="btn" disabled={!picked.length || unchanged || sending} onClick={send}>
+              {sending ? 'Stamping…' : sent ? 'Update stamps' : 'Send stamps'}
             </button>
             {uploaded && !hasScore
               ? <button type="button" className="btn primary" onClick={() => setOver(null)}>Keep playing</button>
               : <button type="button" className="btn primary" onClick={again}>Play again</button>}
           </div>
+          <button type="button" className="btn ghost" aria-pressed={game.following} onClick={() => onFollow(game)}>
+            <Icon name={game.following ? 'check' : 'crew'} size={18} />{game.following ? `In @${game.creator.handle}’s crew` : `Join @${game.creator.handle}’s crew`}
+          </button>
           {!user && hasScore && <p className="hint">Sign in to save your best score.</p>}
         </div>
       )}
+
+      <Dock night label="Game controls">
+        <DockSlot icon="back" label="Exit" onClick={onClose} />
+        <DockSlot icon={paused ? 'play' : 'pause'} label={paused ? 'Resume' : 'Pause'} selected={paused} disabled={!!over} onClick={() => setPaused((p) => !p)} />
+        <CheerSlot game={game} onCheer={onCheer} onHold={onStampPicker} />
+        <DockSlot icon="talk" label="Talk" onClick={() => { setPaused(true); onComments(game) }} />
+        <DockSlot icon="sound" label={muted ? 'Muted' : 'Sound'} selected={muted} onClick={toggleSound} />
+      </Dock>
     </section>
   )
 }
