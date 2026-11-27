@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import Icon from './Icon.jsx'
 
 // A bottom sheet that slides up over the app (comments, sign-in, profile, upload).
-export default function Sheet({ title, onClose, children, footer }) {
+export default function Sheet({ title, onClose, children, footer, top = false }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -10,7 +10,7 @@ export default function Sheet({ title, onClose, children, footer }) {
   }, [onClose])
 
   return (
-    <div className="backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+    <div className={`backdrop${top ? ' top' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={title}>
         <div className="sheet-h">
           <h3>{title}</h3>

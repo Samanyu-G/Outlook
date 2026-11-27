@@ -523,6 +523,8 @@ video.trailer { background: #111; }
 
 /* ---------- Sheets ---------- */
 .backdrop { position: absolute; inset: 0; z-index: 30; background: rgba(var(--shadow), .3); display: flex; flex-direction: column; justify-content: flex-end; animation: fade .2s; }
+/* Legal documents open above the full-screen overlays (z 40) */
+.backdrop.top { z-index: 55; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes rise { from { transform: translateY(24px); opacity: 0; } }
 .sheet { background: var(--raised); color: var(--text); border-radius: 28px 28px 0 0; max-height: 86%; display: flex; flex-direction: column; animation: rise .28s cubic-bezier(.2, .8, .2, 1); min-height: 0; padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: var(--e3); }

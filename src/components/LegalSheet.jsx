@@ -2,11 +2,12 @@ import { PRIVACY, TERMS } from '../content/legal.js'
 import Sheet from './Sheet.jsx'
 
 // Shows the Terms of Service or the Privacy Policy, with a contents list for quick jumping.
+// It opens on top of everything, including the full-screen 18+ and sign-in screens.
 export default function LegalSheet({ doc, onClose }) {
   const d = doc === 'privacy' ? PRIVACY : TERMS
   const id = (h) => `${doc}-${h.split('.')[0]}`
   return (
-    <Sheet title={d.title} onClose={onClose}>
+    <Sheet title={d.title} onClose={onClose} top>
       <article className="legal-doc" aria-label={d.title}>
         <p className="legal-meta">Version {d.version} · Effective {d.effective}</p>
         <nav className="legal-toc" aria-label="Contents">
