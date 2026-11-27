@@ -6,7 +6,7 @@
 // Data Protection Act 2023; for the EU/UK, GDPR; for the US, COPPA for under-13s).
 //
 // Before launch: put your real contact email here.
-export const CONTACT_EMAIL = 'YOUR-CONTACT-EMAIL'
+export const CONTACT_EMAIL = 'gsomg2023@gmail.com'
 export const TERMS_VERSION = '2026-11-27'
 export const MIN_AGE = 13
 // Set when someone ticks the box before signing in; used to record their agreement afterwards.
