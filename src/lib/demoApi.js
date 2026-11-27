@@ -3,6 +3,7 @@
 // so you can try the app (and so tests work offline). Nothing here is shared.
 
 import { buildMailbox, buildStudio, countStamps } from './activity.js'
+import { isAdultDob as isAdult } from './age.js'
 
 const KEY = 'nativity:demo:v1'
 const COLORS = ['#f4b6a0', '#b9cde6', '#b7d3c0', '#f2d98d', '#e7b3c0']
@@ -69,6 +70,7 @@ export const demoApi = {
   mode: 'demo',
 
   async getUser() { return me() },
+  async startGuest() { return me() },
   onAuthChange(cb) { listeners.add(cb); return () => listeners.delete(cb) },
   async signInWithEmail(email) {
     await wait()
@@ -175,8 +177,7 @@ export const demoApi = {
     return prev
   },
   // Safety features in demo mode: reports and blocks stay in this browser; no moderation.
-  async acceptTerms() { if (me()) { db.profiles[me().id].terms_accepted_at = new Date().toISOString(); save() } },
-  async report() { needUser(); await wait() },
+  async report() { needUser(); await wait(); return Math.random().toString(36).slice(2, 10).toUpperCase() },
   async block(userId) { needUser(); (db.blocks ||= []).push({ blocker_id: me().id, blocked_id: userId }); save() },
   async unblock(userId) { db.blocks = (db.blocks || []).filter((b) => !(b.blocker_id === me().id && b.blocked_id === userId)); save() },
   async listBlocked() { return (db.blocks || []).filter((b) => b.blocker_id === me()?.id).map((b) => db.profiles[b.blocked_id]).filter(Boolean) },
@@ -261,5 +262,76 @@ export const demoApi = {
     for (const k of ['likes', 'feedback', 'plays', 'views', 'comments', 'play_starts']) db[k] = db[k].filter((x) => x.user_id !== uid)
     db.follows = db.follows.filter((f) => f.follower_id !== uid && f.creator_id !== uid)
     db.session = null; save(); listeners.forEach((l) => l(null))
+  },
+
+  /* Adults only, consent and privacy rights: same rules as the database, kept in this browser. */
+  async getAccountState() {
+    if (!me()) return null
+    const uid = me().id
+    const age = (db.age ||= {})[uid]
+    const acc = (db.acceptances ||= []).filter((a) => a.user_id === uid)
+    const corr = (db.corrections ||= []).filter((c) => c.user_id === uid).at(-1)
+    const accepted = Object.fromEntries(acc.map((a) => [a.doc, a.version]))
+    const current = { terms: 'v2', privacy: 'v2' }
+    return {
+      ageStatus: age?.status ?? null, birthDate: age?.birth_date ?? null, accepted, current,
+      correction: corr ? { status: corr.status, requested_dob: corr.requested_dob, created_at: corr.created_at, note: corr.note } : null,
+      rulesNotifiedAt: db.profiles[uid]?.rules_notified_at ?? null,
+      canParticipate: ['adult', 'operator'].includes(age?.status) && accepted.terms === current.terms && accepted.privacy === current.privacy,
+    }
+  },
+  async acceptPolicies(terms, privacy) {
+    needUser()
+    if (terms !== 'v2' || privacy !== 'v2') throw new Error('The Terms or Privacy Policy changed. Reload Nativity to read the latest version.')
+    const uid = me().id
+    for (const [doc, version] of [['terms', terms], ['privacy', privacy]]) {
+      if (!(db.acceptances ||= []).some((a) => a.user_id === uid && a.doc === doc && a.version === version)) db.acceptances.push({ user_id: uid, doc, version, accepted_at: new Date().toISOString() })
+    }
+    save()
+  },
+  async confirmBirthDate(dob) {
+    needUser()
+    const uid = me().id
+    if ((db.age ||= {})[uid]) throw new Error('Your date of birth is already on record. To change it, send a correction request from Options.')
+    const status = isAdult(dob) ? 'adult' : 'ineligible'
+    db.age[uid] = { status, birth_date: status === 'adult' ? dob : null, checked_at: new Date().toISOString() }
+    if (status === 'ineligible') {
+      db.likes = db.likes.filter((l) => l.user_id !== uid)
+      db.follows = db.follows.filter((f) => f.follower_id !== uid && f.creator_id !== uid)
+      db.feedback = db.feedback.filter((f) => f.user_id !== uid)
+    }
+    save(); return status
+  },
+  async requestDobCorrection(dob, reason) {
+    needUser()
+    const uid = me().id
+    if ((db.corrections ||= []).some((c) => c.user_id === uid && c.status === 'pending')) throw new Error('You already have a correction waiting for review.')
+    if (!reason || reason.trim().length < 10) throw new Error('Tell us a bit more (at least 10 characters).')
+    db.corrections.push({ id: 'k' + Date.now(), user_id: uid, requested_dob: dob, reason: reason.trim(), status: 'pending', created_at: new Date().toISOString() })
+    save()
+  },
+  async listDobCorrections() {
+    return (db.corrections || []).filter((c) => c.status === 'pending').map((c) => ({
+      id: c.id, user_id: c.user_id, handle: db.profiles[c.user_id]?.handle, current_status: db.age?.[c.user_id]?.status,
+      current_dob: db.age?.[c.user_id]?.birth_date, requested_dob: c.requested_dob, reason: c.reason, created_at: c.created_at,
+    }))
+  },
+  async reviewDobCorrection(id, approve, note) {
+    const c = (db.corrections || []).find((x) => x.id === id)
+    if (!c) throw new Error('That request was already reviewed.')
+    if (c.user_id === me()?.id) throw new Error('Another moderator must review your own request.')
+    if (approve) { const ok = isAdult(c.requested_dob); db.age[c.user_id] = { status: ok ? 'adult' : 'ineligible', birth_date: ok ? c.requested_dob : null, checked_at: new Date().toISOString() } }
+    Object.assign(c, { status: approve ? 'approved' : 'rejected', note }); save()
+  },
+  async ackRulesNotice() { if (me()) { db.profiles[me().id].rules_notified_at = new Date().toISOString(); save() } },
+  async exportMyData() {
+    const uid = me().id
+    const mine = (k, col = 'user_id') => (db[k] || []).filter((x) => x[col] === uid)
+    return {
+      exported_at: new Date().toISOString(), service: 'Nativity (demo mode)', account: { id: uid, email: me().email },
+      profile: db.profiles[uid], age_record: db.age?.[uid] ?? null, policy_acceptances: mine('acceptances'), date_of_birth_corrections: mine('corrections'),
+      notes: mine('comments'), cheers: mine('likes'), crews_you_joined: mine('follows', 'follower_id'), stamps_you_gave: mine('feedback'),
+      trailer_views: mine('views'), games_played: mine('play_starts'), rounds_played: mine('plays'), people_you_blocked: mine('blocks', 'blocker_id'),
+    }
   },
 }

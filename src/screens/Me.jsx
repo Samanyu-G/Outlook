@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react'
 import { api, initials, timeAgo } from '../lib/api.js'
 import { isToday, playerLevel, STAMPS, topStamp } from '../lib/activity.js'
+import { formatDob } from '../lib/age.js'
+import { GRIEVANCE_OFFICER, PRIVACY_VERSION, TERMS_VERSION } from '../content/legal.js'
 import Icon from '../components/Icon.jsx'
 import Sheet from '../components/Sheet.jsx'
 import { Avatar, Badge, Stamp, Toggle } from '../components/ui.jsx'
@@ -195,7 +197,8 @@ export function Studio({ myGames, gameId, setGameId, stats, error, onMake, onDel
 /* ---------- 12 Options ---------- */
 const SAVER = ['Off', 'Wi-Fi only', 'Always']
 
-export function Options({ prefs, setPref, profile, blockedCount, member, onDone, onEditProfile, onSignIn, onSignOut, onBlocked, onDoc, onDelete, onRules, isAdmin, onRefDesk }) {
+export function Options({ prefs, setPref, profile, account, blockedCount, member, onDone, onEditProfile, onSignIn, onSignOut, onBlocked, onDoc, onDelete, onRules, isAdmin, onRefDesk, onDob, onExport, exporting }) {
+  const dobLabel = account?.birthDate ? formatDob(account.birthDate) : account?.ageStatus === 'operator' ? 'Team account' : account?.ageStatus === 'ineligible' ? 'Under 18' : 'Not confirmed'
   return (
     <main className="screen" aria-label="Options">
       <div className="title-row">
@@ -216,6 +219,7 @@ export function Options({ prefs, setPref, profile, blockedCount, member, onDone,
         {member ? (
           <>
             <button type="button" className="orow" onClick={onEditProfile}><span>Handle &amp; bio</span><em>@{profile?.handle}</em><Icon name="chevron" size={18} /></button>
+            {account && <button type="button" className="orow" onClick={onDob}><span>Date of birth</span><em>{dobLabel}</em><Icon name="chevron" size={18} /></button>}
             <button type="button" className="orow" onClick={onSignOut}><span>Sign out</span><Icon name="chevron" size={18} /></button>
           </>
         ) : (
@@ -228,11 +232,18 @@ export function Options({ prefs, setPref, profile, blockedCount, member, onDone,
         <button type="button" className="orow" onClick={onRules}><span>Community rules</span><Icon name="chevron" size={18} /></button>
         {isAdmin && <button type="button" className="orow" onClick={onRefDesk}><span>Ref desk</span><Icon name="chevron" size={18} /></button>}
       </div>
-      <p className="overline-mono">About</p>
+      <p className="overline-mono">Privacy</p>
       <div className="group">
-        <button type="button" className="orow" onClick={() => onDoc('terms')}><span>Terms &amp; privacy</span><Icon name="chevron" size={18} /></button>
+        {member && <button type="button" className="orow" onClick={onExport} disabled={exporting}><span>Download my data</span><em>{exporting ? 'Preparing…' : 'JSON'}</em><Icon name="down" size={18} /></button>}
+        <button type="button" className="orow" onClick={() => onDoc('privacy')}><span>Privacy Policy</span><Icon name="chevron" size={18} /></button>
         {member && <button type="button" className="orow danger" onClick={onDelete}><span>Delete account</span><Icon name="chevron" size={18} /></button>}
       </div>
+      <p className="overline-mono">About</p>
+      <div className="group">
+        <button type="button" className="orow" onClick={() => onDoc('terms')}><span>Terms of Service</span><Icon name="chevron" size={18} /></button>
+        <a className="orow" href={`mailto:${GRIEVANCE_OFFICER.email}?subject=Nativity%20grievance`}><span>Grievance Officer</span><em>{GRIEVANCE_OFFICER.name}</em><Icon name="mail" size={18} /></a>
+      </div>
+      <p className="muted small center">Nativity is for adults 18+. Terms {TERMS_VERSION} · Privacy {PRIVACY_VERSION}</p>
     </main>
   )
 }
@@ -311,7 +322,8 @@ export function DeleteAccountSheet({ onClose, onDeleted }) {
   }
   return (
     <Sheet title="Delete account" onClose={busy ? () => {} : onClose}>
-      <div className="note warn-note"><b>This can’t be undone.</b> Your profile, games and their files, cheers, stamps, talk notes and crews are deleted for good.</div>
+      <div className="note warn-note"><b>This can’t be undone.</b> Your profile, games and their files, cheers, stamps, notes, crews, age and consent records are deleted straight away. Indian law (IT Rules 2021) requires us to keep a minimal record (your email, handle, sign-up date and age-check result) for 180 days, plus any content that was hidden after a report. Then those are deleted too.</div>
+      <p className="muted small">Want a copy first? Use Download my data in Options.</p>
       <label className="field"><span>Type DELETE to confirm</span>
         <input id="del-confirm" type="text" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
       </label>

@@ -105,7 +105,7 @@ A view counts once per person, and only after the trailer has been on screen for
 - If 3 different people report the same game or comment, it's hidden automatically until a moderator decides.
 - Moderators (profiles with `role = 'admin'`) get a moderation screen: hide or restore content, dismiss reports, suspend or unsuspend accounts. The database checks the role, so the screen can't be abused by others.
 - Suspended accounts can still play but can't post, comment, like, follow, report or upload.
-- Sign-up requires ticking "I'm 13 or older and agree to the Terms and Privacy Policy". Accounts made before this are asked once.
+- Nativity is for adults 18+. Visitors confirm they're 18+ before any guest ID is created; members confirm their date of birth once after signing in, checked on the server (`0008_adults_only.sql`). See `docs/LEGAL-COMPLIANCE.md`.
 - The Terms and Privacy Policy are plain-language drafts in `src/content/legal.js`. Put your contact email in `CONTACT_EMAIL` and have a lawyer review them before a public launch.
 
 ## Roadmap
@@ -113,5 +113,6 @@ A view counts once per person, and only after the trailer has been on screen for
 - **Phase 1:** accounts, database, social features ✅
 - **Phase 2:** creator uploads (zip + trailer), storage, sandboxed games ✅
 - **Phase 3:** ranked feed with the new-creator boost, 3-second views, guest views, spam limits ✅
-- **Phase 4:** reports with auto-hide, blocking, moderation screen, suspensions, terms, privacy policy and 13+ age gate ✅ (have a lawyer review the drafts in `src/content/legal.js` before launch)
+- **Phase 4:** reports with auto-hide, blocking, moderation screen, suspensions, terms and privacy policy ✅
+- **Phase 6:** strictly 18+ with server-side date-of-birth checks, consent records, date-of-birth corrections, data download, retention rules and Indian-law Terms and Privacy Policy ✅ (see `docs/LEGAL-COMPLIANCE.md`; items marked "Requires legal review" need a lawyer)
 - **Phase 5:** closed beta with seeded games

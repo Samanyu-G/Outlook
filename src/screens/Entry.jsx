@@ -2,13 +2,10 @@
 import { useState } from 'react'
 import { api } from '../lib/api.js'
 import { STAMPS } from '../lib/activity.js'
-import { MIN_AGE, TERMS_PENDING_KEY, TERMS_VERSION } from '../content/legal.js'
+import { MIN_AGE } from '../content/legal.js'
 import Icon from '../components/Icon.jsx'
 import { CloseButton, Dock, PlayButton, Stamp } from '../components/ui.jsx'
 
-function rememberAgreement() {
-  try { localStorage.setItem(TERMS_PENDING_KEY, TERMS_VERSION) } catch { /* the one-time gate will ask instead */ }
-}
 
 /* ---------- 13 Press start ---------- */
 export function PressStart({ reason, onClose, onOpenDoc }) {
@@ -21,7 +18,6 @@ export function PressStart({ reason, onClose, onOpenDoc }) {
   async function submit(e) {
     e.preventDefault()
     setBusy(true); setError('')
-    rememberAgreement()
     try {
       const res = await api.signInWithEmail(email.trim())
       if (res.sent) setSentTo(email.trim())
@@ -29,7 +25,7 @@ export function PressStart({ reason, onClose, onOpenDoc }) {
     } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
   async function google() {
-    setError(''); rememberAgreement()
+    setError('')
     try { await api.signInWithGoogle() } catch (err) { setError(err.message) }
   }
 
@@ -39,7 +35,7 @@ export function PressStart({ reason, onClose, onOpenDoc }) {
         <div className="entry-close"><CloseButton onClick={onClose} /></div>
         <div className="shapes" aria-hidden="true"><i className="s1" /><i className="s2" /><i className="s3" /><i className="s4" /></div>
         <h1 className="h-display center">Press start</h1>
-        <p className="lede center">{reason || 'Cheer, talk and join crews.'} Browsing and playing never need an account.</p>
+        <p className="lede center">{reason || 'Cheer, talk and join crews.'} Browsing and playing never need an account. Nativity is for adults {MIN_AGE}+: new accounts confirm their date of birth after signing in.</p>
         {sentTo ? (
           <div className="note"><b>Check your email.</b> We sent a start link to {sentTo}. Open it on this phone and you’ll come straight back here, signed in.</div>
         ) : (
@@ -49,7 +45,7 @@ export function PressStart({ reason, onClose, onOpenDoc }) {
             </label>
             <label className="agree">
               <input id="agree-terms" type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-              <span>I’m {MIN_AGE} or older and agree to the{' '}
+              <span>I’m {MIN_AGE} or older and I agree to the{' '}
                 <button type="button" className="link" onClick={(e) => { e.preventDefault(); onOpenDoc('terms') }}>Terms</button>{' '}and{' '}
                 <button type="button" className="link" onClick={(e) => { e.preventDefault(); onOpenDoc('privacy') }}>Privacy Policy</button>.
               </span>
@@ -57,7 +53,7 @@ export function PressStart({ reason, onClose, onOpenDoc }) {
             <button type="submit" className="btn primary big" disabled={busy || !agreed || !email.includes('@')}>
               {busy ? 'Sending…' : api.mode === 'demo' ? 'Start (demo)' : 'Email me a start link'}
             </button>
-            {api.mode === 'live' && (
+            {api.mode === 'live' && api.googleEnabled && (
               <>
                 <div className="or"><span>or</span></div>
                 <button type="button" className="btn big" disabled={!agreed} onClick={google}>Continue with Google</button>

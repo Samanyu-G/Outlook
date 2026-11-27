@@ -6,7 +6,6 @@ import CommentsSheet from './components/CommentsSheet.jsx'
 import MoreSheet from './components/MoreSheet.jsx'
 import ReportSheet from './components/ReportSheet.jsx'
 import LegalSheet from './components/LegalSheet.jsx'
-import TermsGate from './components/TermsGate.jsx'
 import Sheet from './components/Sheet.jsx'
 import Icon from './components/Icon.jsx'
 import { CheerSlot, HubMenu, StampPicker } from './components/CheerSlot.jsx'
@@ -17,7 +16,8 @@ import { BlockedSheet, DeleteAccountSheet, EditProfileSheet, Mailbox, Options, r
 import Make from './screens/Make.jsx'
 import RefDesk from './screens/RefDesk.jsx'
 import { MOODS_KEY, ONBOARD_KEY, Onboarding, PressStart } from './screens/Entry.jsx'
-import { TERMS_PENDING_KEY } from './content/legal.js'
+import { GRIEVANCE_TIMES, RULES } from './content/legal.js'
+import { AccountGate, ADULT_KEY, AgeDeclaration, DobSheet, IneligibleAccount, NotForYou, RulesReminder, UNDERAGE_KEY } from './screens/Age.jsx'
 
 const CHANNELS = [['foryou', 'For you'], ['fresh', 'Fresh'], ['following', 'Crew']]
 const PREFS_KEY = 'nativity:prefs'
@@ -26,12 +26,9 @@ const readJSON = (k, d) => { try { return { ...d, ...JSON.parse(localStorage.get
 const seenOnboarding = () => { try { return localStorage.getItem(ONBOARD_KEY) === '1' } catch { return true } }
 const readMoods = () => { try { return JSON.parse(localStorage.getItem(MOODS_KEY)) || [] } catch { return [] } }
 
-const RULES = [
-  'Only upload games you made or have the right to share.',
-  'Nothing sexual, hateful, violent or harmful.',
-  'Criticise the game, never the person.',
-  'Report anything that breaks the rules.',
-]
+const readFlag = (k) => { try { return localStorage.getItem(k) === '1' } catch { return false } }
+const writeFlag = (k, on) => { try { if (on) localStorage.setItem(k, '1'); else localStorage.removeItem(k) } catch { /* ignore */ } }
+const QUARTER = 90 * 864e5
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -57,7 +54,13 @@ export default function App() {
   const [sheet, setSheet] = useState(null) // { type: 'talk'|'more'|'makerMore'|'report'|'stamps'|'edit'|'blocked'|'delete'|'rules', ... }
   const [auth, setAuth] = useState(null)   // { reason } while "Press start" is open
   const [doc, setDoc] = useState(null)
-  const [needTerms, setNeedTerms] = useState(false)
+  const [adultDeclared, setAdultDeclared] = useState(() => readFlag(ADULT_KEY))
+  const [underage, setUnderage] = useState(() => readFlag(UNDERAGE_KEY))
+  const [account, setAccount] = useState(null)   // age + consent state of the signed-in member (null = not loaded / not a member)
+  const [gateLater, setGateLater] = useState(false)
+  const [reminder, setReminder] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [corrections, setCorrections] = useState(null)
   const [onboarding, setOnboarding] = useState(() => !seenOnboarding())
 
   /* ---------- per-screen state ---------- */
@@ -97,35 +100,33 @@ export default function App() {
 
   /* ---------- auth ---------- */
   useEffect(() => {
-    api.getUser().then((u) => { setUser(u); setAuthReady(true) })
+    // No guest ID is created until the visitor has confirmed they're 18 or older.
+    api.getUser(readFlag(ADULT_KEY)).then((u) => { setUser(u); setAuthReady(true) })
     return api.onAuthChange((u) => {
       setUser(u)
       if (isMember(u)) setAuth(null)
     })
   }, [])
 
-  useEffect(() => {
-    if (!member) { setProfile(null); setNeedTerms(false); setActivity(null); setMail(null); setMyGames(null); return }
-    let alive = true
-    api.getMyProfile().then(async (p) => {
-      if (!alive) return
-      setProfile(p)
-      if (!p || !('terms_accepted_at' in p) || p.terms_accepted_at) return
-      let pending = null
-      try { pending = localStorage.getItem(TERMS_PENDING_KEY) } catch { /* ignore */ }
-      if (pending) {
-        try { await api.acceptTerms(); localStorage.removeItem(TERMS_PENDING_KEY); return } catch { /* fall back to asking */ }
-      }
-      if (alive) setNeedTerms(true)
-    }).catch(() => {})
-    return () => { alive = false }
-  }, [member?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const loadAccount = useCallback(() => api.getAccountState().then((st) => {
+    setAccount(st)
+    // Quarterly reminder of the rules (IT Rules 3(1)(c)) for members who can post.
+    if (st?.canParticipate && (!st.rulesNotifiedAt || Date.now() - new Date(st.rulesNotifiedAt).getTime() > QUARTER)) setReminder(true)
+    return st
+  }).catch(() => null), [])
 
+  useEffect(() => {
+    if (!member) { setProfile(null); setAccount(null); setActivity(null); setMail(null); setMyGames(null); setGateLater(false); return }
+    api.getMyProfile().then(setProfile).catch(() => {})
+    loadAccount()
+  }, [member?.id, loadAccount]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Signed in, 18+ confirmed and current terms accepted: otherwise show the right step.
   const requireUser = useCallback((reason) => {
-    if (member) return true
-    setAuth({ reason })
-    return false
-  }, [member])
+    if (!member) { setAuth({ reason }); return false }
+    if (account && !account.canParticipate) { setGateLater(false); return false }
+    return true
+  }, [member, account])
 
   /* ---------- loading games ---------- */
   const merge = (rows) => setCatalog((c) => { const n = { ...c }; for (const g of rows) n[g.id] = g; return n })
@@ -320,6 +321,39 @@ export default function App() {
     } catch (e) { toast(e.message) }
   }
 
+  /* ---------- adults only ---------- */
+  async function declareAdult() {
+    writeFlag(ADULT_KEY, true); writeFlag(UNDERAGE_KEY, false)
+    setAdultDeclared(true); setUnderage(false)
+    const u = await api.startGuest().catch(() => null)
+    if (u) setUser(u)
+  }
+  function declareUnder() { writeFlag(UNDERAGE_KEY, true); setUnderage(true) }
+
+  async function exportData() {
+    setExporting(true)
+    try {
+      const data = await api.exportMyData()
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+      const a = document.createElement('a')
+      a.href = url; a.download = `nativity-my-data-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast('Your data was downloaded')
+    } catch (e) { toast(e.message) } finally { setExporting(false) }
+  }
+
+  const loadCorrections = useCallback(() => { api.listDobCorrections().then(setCorrections).catch(() => setCorrections([])) }, [])
+  useEffect(() => { if (route.name === 'refdesk' && isAdmin) loadCorrections() }, [route.name, isAdmin, loadCorrections])
+  async function reviewCorrection(c, approve, note) {
+    setRefBusy(c.id)
+    try { await api.reviewDobCorrection(c.id, approve, note); toast(approve ? `Correction approved for @${c.handle}` : `Correction rejected for @${c.handle}`); loadCorrections() } catch (e) { toast(e.message) } finally { setRefBusy(null) }
+  }
+
+  const needsGate = !!(member && account && account.ageStatus !== 'ineligible' &&
+    (!account.ageStatus || account.accepted.terms !== account.current.terms || account.accepted.privacy !== account.current.privacy))
+  const dobOnlyMissing = needsGate && !account.ageStatus
+
   /* ---------- derived ---------- */
   const detailGame = route.name === 'details' ? catalog[route.id] : null
   const dockGame = route.name === 'details' ? detailGame : route.name === 'discover' ? catalog[activeId] || feedGames[0] : null
@@ -467,7 +501,8 @@ export default function App() {
         return <Studio myGames={myGames} gameId={studioId} setGameId={setStudioId} stats={studio} error={studioError}
           onMake={() => go({ name: 'make' })} onDelete={deleteMyGame} />
       case 'options':
-        return <Options prefs={prefs} setPref={setPref} profile={profile} blockedCount={blockedCount} member={!!member} isAdmin={isAdmin}
+        return <Options prefs={prefs} setPref={setPref} profile={profile} account={account} blockedCount={blockedCount} member={!!member} isAdmin={isAdmin}
+          onDob={() => setSheet({ type: 'dob' })} onExport={exportData} exporting={exporting}
           onDone={() => (stack.length > 1 ? back() : hubGo('discover'))}
           onEditProfile={() => setSheet({ type: 'edit' })}
           onSignIn={() => setAuth({ reason: '' })}
@@ -478,7 +513,7 @@ export default function App() {
         return <Make onExit={back} toast={toast}
           onPublished={() => { setTab('fresh'); setStack([{ name: 'discover' }]); setCatalog({}); catalogLoaded.current = false; loadFeed() }} />
       case 'refdesk':
-        return isAdmin ? <RefDesk items={reports} error={reportsError} busy={refBusy} onAct={refAct} /> : null
+        return isAdmin ? <RefDesk items={reports} error={reportsError} busy={refBusy} onAct={refAct} corrections={corrections} onReviewCorrection={reviewCorrection} /> : null
       default:
         return (
           <main className="discover" aria-label="Discover">
@@ -491,7 +526,7 @@ export default function App() {
             </nav>
             <Feed
               games={feedGames} loading={loading} error={error} tab={tab}
-              paused={!!playing || !!sheet || onboarding || !!auth} autoplay={prefs.autoplay} dataSaver={dataSaver}
+              paused={!!playing || !!sheet || onboarding || !!auth || (!member && !adultDeclared) || needsGate || account?.ageStatus === 'ineligible'} autoplay={prefs.autoplay} dataSaver={dataSaver}
               onActive={setActiveId} onPlay={play} onFollow={onFollow} onOpen={openGame} onMaker={openMaker}
               onView={(id) => api.recordView(id).catch(() => {})}
               onRetry={loadFeed} onFindFresh={() => setTab('fresh')}
@@ -554,11 +589,19 @@ export default function App() {
           </Sheet>
         )}
         {sheet?.type === 'report' && (
-          <ReportSheet target={sheet.target} onClose={closeSheet} onDone={() => { setSheet(null); toast('Thanks for reporting. A ref will review it.') }} />
+          <ReportSheet target={sheet.target} onClose={closeSheet} onDone={(ref, reason) => {
+            setSheet(null)
+            const within = reason === 'intimate' ? GRIEVANCE_TIMES.intimate : reason === 'spam' || reason === 'other' ? GRIEVANCE_TIMES.resolve : GRIEVANCE_TIMES.prohibited
+            toast(ref ? `Report received (ref ${ref}). We’ll act within ${within}.` : 'You already reported this. A ref will review it.')
+          }} />
         )}
         {sheet?.type === 'edit' && <EditProfileSheet onClose={closeSheet} toast={toast} onSaved={(p) => { setProfile(p); setSheet(null); refreshAll() }} />}
         {sheet?.type === 'blocked' && <BlockedSheet onClose={closeSheet} toast={toast} onChanged={() => { setBlockedCount((n) => Math.max(0, (n || 1) - 1)); refreshAll() }} />}
-        {sheet?.type === 'delete' && <DeleteAccountSheet onClose={closeSheet} onDeleted={() => { setSheet(null); setStack([{ name: 'discover' }]); toast('Your account was deleted') }} />}
+        {sheet?.type === 'delete' && <DeleteAccountSheet onClose={closeSheet} onDeleted={() => { setSheet(null); setAccount(null); setStack([{ name: 'discover' }]); toast('Your account was deleted') }} />}
+        {sheet?.type === 'dob' && <DobSheet state={account} onClose={closeSheet} toast={toast} onChanged={() => { setSheet(null); loadAccount() }} />}
+        {reminder && !sheet && !needsGate && (
+          <RulesReminder onOpenDoc={setDoc} onClose={() => { setReminder(false); api.ackRulesNotice().catch(() => {}) }} />
+        )}
         {sheet?.type === 'rules' && (
           <Sheet title="Community rules" onClose={closeSheet}>
             <p>Nativity is a place for new game makers to be seen. To keep it safe and kind, everyone agrees to a few rules.</p>
@@ -568,12 +611,26 @@ export default function App() {
         )}
 
         {auth && <PressStart reason={auth.reason} onClose={() => setAuth(null)} onOpenDoc={setDoc} />}
-        {onboarding && <Onboarding onDone={(m) => { setOnboarding(false); if (m.length) setMoods(m) }} />}
-        {member && needTerms && (
-          <TermsGate
-            onOpenDoc={setDoc}
-            onAccept={async () => { await api.acceptTerms(); setNeedTerms(false); toast('Welcome to Nativity!') }}
-            onSignOut={async () => { await api.signOut(); setNeedTerms(false) }}
+        {onboarding && (adultDeclared || member) && <Onboarding onDone={(m) => { setOnboarding(false); if (m.length) setMoods(m) }} />}
+        {/* Adults only: visitors confirm 18+ before any guest ID is created */}
+        {authReady && !member && !adultDeclared && !underage && <AgeDeclaration onAdult={declareAdult} onUnder={declareUnder} onOpenDoc={setDoc} />}
+        {authReady && !member && underage && <NotForYou onBack={() => { writeFlag(UNDERAGE_KEY, false); setUnderage(false) }} />}
+        {/* Members: date of birth once, then the current Terms and Privacy Policy */}
+        {needsGate && (dobOnlyMissing || !gateLater) && !sheet && (
+          <AccountGate
+            key={account.ageStatus || 'new'} state={account} onOpenDoc={setDoc}
+            onDone={async () => { const st = await loadAccount(); setReminder(false); api.ackRulesNotice().catch(() => {}); if (st?.canParticipate) toast('Welcome to Nativity!'); refreshAll() }}
+            onIneligible={() => { loadAccount(); refreshAll() }}
+            onSignOut={async () => { await api.signOut(); setStack([{ name: 'discover' }]) }}
+            onLater={() => setGateLater(true)}
+          />
+        )}
+        {member && account?.ageStatus === 'ineligible' && !sheet && (
+          <IneligibleAccount
+            state={account}
+            onCorrection={() => setSheet({ type: 'dob' })}
+            onDelete={() => setSheet({ type: 'delete' })}
+            onSignOut={async () => { await api.signOut(); setStack([{ name: 'discover' }]) }}
           />
         )}
         {doc && <LegalSheet doc={doc} onClose={() => setDoc(null)} />}

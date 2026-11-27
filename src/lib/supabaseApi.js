@@ -88,15 +88,21 @@ async function blockedIds() {
 
 export const supabaseApi = {
   mode: 'live',
+  // Google sign-in is off in Supabase. Set VITE_GOOGLE_SIGN_IN=on after enabling it there.
+  googleEnabled: import.meta.env.VITE_GOOGLE_SIGN_IN === 'on',
 
   /* ---------- auth ---------- */
-  async getUser() {
+  // allowGuest: only start an anonymous guest session once the visitor has
+  // confirmed they are 18 or older (no ID is created for anyone else).
+  async getUser(allowGuest = false) {
     const { data } = await supabase.auth.getSession()
     currentUser = data.session?.user ?? null
-    // No session yet? Start a silent guest session so this visitor's views count.
-    // (Needs "Allow anonymous sign-ins" on in Supabase; if it's off we just continue.)
-    if (!currentUser) currentUser = await startGuest()
+    if (!currentUser && allowGuest) currentUser = await startGuest()
     return currentUser
+  },
+  async startGuest() {
+    if (currentUser) return currentUser
+    return startGuest()
   },
   onAuthChange(cb) {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -307,13 +313,12 @@ export const supabaseApi = {
   },
 
   /* ---------- safety ---------- */
-  async acceptTerms() {
-    must(await supabase.rpc('accept_terms'))
-  },
+  // Returns a short reference for the acknowledgement, or null if you already reported it.
   async report(targetType, targetId, reason, details = '') {
-    const { error } = await supabase.from('reports').insert({ reporter_id: currentUser.id, target_type: targetType, target_id: targetId, reason, details: details.trim().slice(0, 500) })
-    if (error?.code === '23505') return // already reported by you: that's fine
+    const { data, error } = await supabase.from('reports').insert({ reporter_id: currentUser.id, target_type: targetType, target_id: targetId, reason, details: details.trim().slice(0, 500) }).select('id').single()
+    if (error?.code === '23505') return null // already reported by you: that's fine
     if (error) throw new Error(error.message)
+    return data.id.slice(0, 8).toUpperCase()
   },
   async block(userId) {
     const { error } = await supabase.from('blocks').insert({ blocker_id: currentUser.id, blocked_id: userId })
@@ -443,5 +448,60 @@ export const supabaseApi = {
     await supabase.auth.signOut()
     blockedCache = null
     await startGuest()
+  },
+
+  /* ---------- Adults only, consent and privacy rights (Phase 6) ---------- */
+  // null = the 0008 migration hasn't been run yet (the app then skips the new gate).
+  async getAccountState() {
+    if (!isMember(currentUser)) return null
+    const { data, error } = await supabase.rpc('my_account_state')
+    if (error?.code === 'PGRST202') return null
+    if (error) throw new Error(error.message)
+    return {
+      ageStatus: data.age_status, birthDate: data.birth_date,
+      accepted: data.accepted || {}, current: data.current || {},
+      correction: data.correction, rulesNotifiedAt: data.rules_notified_at, canParticipate: data.can_participate,
+    }
+  },
+  async acceptPolicies(terms, privacy) {
+    must(await supabase.rpc('accept_policies', { p_terms: terms, p_privacy: privacy }))
+  },
+  async confirmBirthDate(dob) {
+    return must(await supabase.rpc('confirm_birth_date', { p_dob: dob }))
+  },
+  async requestDobCorrection(dob, reason) {
+    must(await supabase.rpc('request_birth_date_correction', { p_dob: dob, p_reason: reason }))
+  },
+  async listDobCorrections() {
+    return must(await supabase.rpc('list_birth_date_corrections'))
+  },
+  async reviewDobCorrection(id, approve, note) {
+    must(await supabase.rpc('review_birth_date_correction', { p_id: id, p_approve: approve, p_note: note }))
+  },
+  async ackRulesNotice() {
+    must(await supabase.rpc('ack_rules_notice'))
+  },
+
+  /** Everything we hold about you that the database lets you read (right of access). */
+  async exportMyData() {
+    const id = currentUser.id
+    const own = (table, col = 'user_id', select = '*') => supabase.from(table).select(select).eq(col, id).then((r) => (r.error ? { error: r.error.message } : r.data))
+    const [profile, age, acceptances, corrections, games, comments, likes, crews, crewMembers, stamps, views, playStarts, rounds, reports, blocks] = await Promise.all([
+      supabase.from('profiles').select('handle, display_name, bio, avatar_color, created_at, role, banned, terms_accepted_at, rules_notified_at').eq('id', id).maybeSingle().then((r) => r.data),
+      own('account_age'), own('policy_acceptances'), own('dob_corrections'),
+      own('games', 'creator_id', 'id, title, description, tags, status, touch_friendly, bundle_path, trailer_path, created_at'),
+      own('comments'), own('likes'), own('follows', 'follower_id'), own('follows', 'creator_id', 'created_at'),
+      own('feedback'), own('views'), own('play_starts'), own('plays'), own('reports', 'reporter_id'), own('blocks', 'blocker_id'),
+    ])
+    return {
+      exported_at: new Date().toISOString(),
+      service: 'Nativity',
+      account: { id, email: currentUser.email, created_at: currentUser.created_at, last_sign_in_at: currentUser.last_sign_in_at, sign_in_methods: currentUser.app_metadata?.providers || [] },
+      profile, age_record: age, policy_acceptances: acceptances, date_of_birth_corrections: corrections,
+      games, notes: comments, cheers: likes, crews_you_joined: crews, people_in_your_crew_count: Array.isArray(crewMembers) ? crewMembers.length : crewMembers,
+      stamps_you_gave: stamps, trailer_views: views, games_played: playStarts, rounds_played: rounds,
+      reports_you_sent: reports, people_you_blocked: blocks,
+      on_this_device: 'Settings and game saves stored in your browser are not included; they never leave your device.',
+    }
   },
 }

@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { api } from '../lib/api.js'
-import { REASONS } from '../content/legal.js'
+import { GRIEVANCE_OFFICER, REASONS } from '../content/legal.js'
 import Sheet from './Sheet.jsx'
-
 
 // Report a game or a comment. 3 reports from different people hide it until a moderator reviews it.
 export default function ReportSheet({ target, onClose, onDone }) {
@@ -15,8 +14,8 @@ export default function ReportSheet({ target, onClose, onDone }) {
     e.preventDefault()
     setBusy(true); setError('')
     try {
-      await api.report(target.type, target.id, reason, details)
-      onDone()
+      const ref = await api.report(target.type, target.id, reason, details)
+      onDone(ref, reason)
     } catch (err) {
       setError(err.message); setBusy(false)
     }
@@ -25,7 +24,7 @@ export default function ReportSheet({ target, onClose, onDone }) {
   return (
     <Sheet title={target.type === 'game' ? `Report “${target.label}”` : 'Report comment'} onClose={onClose}>
       <form className="stack" onSubmit={submit}>
-        <p className="muted">What’s wrong? Reports are private: the creator won’t see who sent them.</p>
+        <p className="muted">What’s wrong? Reports are private: the person you report won’t see who sent them. Not signed in, or need to reach a person? Email the Grievance Officer at {GRIEVANCE_OFFICER.email}.</p>
         <div className="reasons" role="radiogroup" aria-label="Reason">
           {REASONS.map(([key, label]) => (
             <label key={key} className={`reason${reason === key ? ' on' : ''}`}>
