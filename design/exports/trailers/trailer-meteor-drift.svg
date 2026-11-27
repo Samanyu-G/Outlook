@@ -1,0 +1,37 @@
+<svg width="312" height="410" viewBox="0 0 312 410" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="312" height="410" fill="url(#paint0_linear_4_38)"/>
+<circle cx="1.5" cy="1.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="54.5" cy="98.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="107.5" cy="195.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="160.5" cy="292.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="213.5" cy="389.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="266.5" cy="76.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="7.5" cy="173.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="60.5" cy="270.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="113.5" cy="367.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="166.5" cy="54.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="219.5" cy="151.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="272.5" cy="248.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="13.5" cy="345.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="66.5" cy="32.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="119.5" cy="129.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="172.5" cy="226.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="225.5" cy="323.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="278.5" cy="10.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="19.5" cy="107.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="72.5" cy="204.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="125.5" cy="301.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="178.5" cy="398.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="231.5" cy="85.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="284.5" cy="182.5" r="1.5" fill="white" fill-opacity="0.6"/>
+<circle cx="89.44" cy="109.04" r="27.04" fill="#9A7259"/>
+<circle cx="239.2" cy="164.3" r="20.8" fill="#9A7259"/>
+<circle cx="171.6" cy="256.7" r="31.2" fill="#9A7259"/>
+<path d="M164.32 319.8L176.929 344.76H151.711L164.32 319.8Z" fill="#FFC94A"/>
+<defs>
+<linearGradient id="paint0_linear_4_38" x1="156" y1="0" x2="156" y2="410" gradientUnits="userSpaceOnUse">
+<stop stop-color="#090A1F"/>
+<stop offset="1" stop-color="#231446"/>
+</linearGradient>
+</defs>
+</svg>
