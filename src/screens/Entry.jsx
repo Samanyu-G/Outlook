@@ -134,11 +134,11 @@ export function Onboarding({ onDone }) {
         <div className="ob-card">{s.art}</div>
         <h1 className="h-1 center">{s.title}</h1>
         <p className="lede center">{s.body}</p>
-        <Dock label="Onboarding">
-          <button type="button" className="skip" onClick={finish}>Skip</button>
-          <PlayButton icon="chevron" label={s.next} wide onClick={() => (i < slides.length - 1 ? setI(i + 1) : finish())} />
-        </Dock>
       </main>
+      <Dock label="Onboarding">
+        <button type="button" className="skip" onClick={finish}>Skip</button>
+        <PlayButton icon="chevron" label={s.next} wide onClick={() => (i < slides.length - 1 ? setI(i + 1) : finish())} />
+      </Dock>
     </div>
   )
 }

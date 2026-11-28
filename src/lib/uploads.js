@@ -112,6 +112,24 @@ export async function readGamePackage(file) {
   return { files, totalBytes, warnings }
 }
 
+/**
+ * Copies a picked video into memory straight away. On Android, Chrome's access to a
+ * file from Google Photos, Drive or the camera can lapse after it's picked, and the
+ * upload then dies with "Failed to fetch" before reaching the server. A copy taken
+ * now (while access is fresh) uploads reliably. Size is checked first so a huge
+ * file is never loaded.
+ */
+export async function holdTrailer(file) {
+  if (file.size > LIMITS.trailerBytes) {
+    throw new UploadError(`Your trailer is ${formatBytes(file.size)}. The limit is ${formatBytes(LIMITS.trailerBytes)}. Try a shorter clip or lower quality.`)
+  }
+  let bytes
+  try { bytes = await file.arrayBuffer() } catch {
+    throw new UploadError('Your phone wouldn’t let us read this video. Save it to your phone’s storage (not only in the cloud) and pick it again.')
+  }
+  return new File([bytes], file.name, { type: trailerTypeFor(file) || 'video/mp4', lastModified: file.lastModified })
+}
+
 /** Checks the trailer video: type, size, length. Returns { duration, portrait, url }. */
 export function checkTrailer(file) {
   return new Promise((resolve, reject) => {

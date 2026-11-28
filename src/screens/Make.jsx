@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api.js'
 import { SHELVES } from '../lib/activity.js'
-import { LIMITS, checkTrailer, formatBytes, parseTags, readGamePackage } from '../lib/uploads.js'
+import { LIMITS, checkTrailer, formatBytes, holdTrailer, parseTags, readGamePackage } from '../lib/uploads.js'
 import Icon from '../components/Icon.jsx'
 import { Dock, DockSlot, PlayButton, Toggle } from '../components/ui.jsx'
 
@@ -41,7 +41,7 @@ export default function Make({ onExit, onPublished, toast }) {
     e.target.value = ''
     if (!file) return
     setTrailer(null); setTrailerError('')
-    try { setTrailer({ file, ...(await checkTrailer(file)) }) } catch (err) { setTrailerError(err.message) }
+    try { const held = await holdTrailer(file); setTrailer({ file: held, ...(await checkTrailer(held)) }) } catch (err) { setTrailerError(err.message) }
   }
 
   const uploading = progress !== null
@@ -59,15 +59,18 @@ export default function Make({ onExit, onPublished, toast }) {
 
   if (!api.canUpload) {
     return (
-      <main className="screen" aria-label="Make">
-        <h1 className="h-display page-title">Make</h1>
-        <div className="note"><b>Uploads need the live database.</b> Connect Supabase (see the README) and this screen will let you publish.</div>
+      <>
+        <main className="screen" aria-label="Make">
+          <h1 className="h-display page-title">Make</h1>
+          <div className="note"><b>Uploads need the live database.</b> Connect Supabase (see the README) and this screen will let you publish.</div>
+        </main>
         <Dock><DockSlot icon="back" label="Back" onClick={onExit} /></Dock>
-      </main>
+      </>
     )
   }
 
   return (
+    <>
     <main className="screen" aria-label="Make">
       <div className="title-row">
         <h1 className="h-display page-title">Make</h1>
@@ -162,7 +165,9 @@ export default function Make({ onExit, onPublished, toast }) {
           )}
         </section>
       )}
+    </main>
 
+      {/* Outside the scrolling <main>: inside it, the dock scrolled with the form and covered the fields */}
       <Dock label="Make steps">
         <DockSlot icon="back" label="Back" disabled={uploading} onClick={() => (step ? setStep(step - 1) : onExit())} />
         <span className="step-dots" aria-hidden="true">{STEPS.map((s, i) => <i key={s} className={i === step ? 'on' : ''} />)}</span>
@@ -170,6 +175,6 @@ export default function Make({ onExit, onPublished, toast }) {
           ? <PlayButton icon="chevron" label={`Next: ${STEPS[step + 1].toLowerCase()}`} wide disabled={!canNext} onClick={() => setStep(step + 1)} />
           : <PlayButton icon="upload" label={uploading ? 'Pressing…' : 'Publish'} wide disabled={!canNext || uploading} onClick={publish} />}
       </Dock>
-    </main>
+    </>
   )
 }

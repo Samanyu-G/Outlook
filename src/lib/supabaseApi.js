@@ -270,7 +270,12 @@ export const supabaseApi = {
     try {
       const up = async (bucket, path, body, contentType) => {
         const { error } = await supabase.storage.from(bucket).upload(path, body, { contentType, upsert: false, cacheControl: '3600' })
-        if (error) throw new Error(`Couldn’t upload ${path.slice(folder.length) || path}: ${error.message}`)
+        if (!error) return
+        const name = path.slice(folder.length) || path
+        // A network-level failure: the request never reached Supabase (dropped connection,
+        // or the phone refused to read the file). Say so plainly instead of "Failed to fetch".
+        if (/failed to fetch|network|load failed/i.test(error.message)) throw new Error(`Couldn’t send ${name}: the upload didn’t reach our server. Check your connection and try again. If it keeps failing, pick the trailer again.`)
+        throw new Error(`Couldn’t upload ${name}: ${error.message}`)
       }
       await up('trailers', trailerPath, trailer, trailer.type || 'video/mp4')
       step(trailer.size)
